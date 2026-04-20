@@ -1,0 +1,22 @@
+{
+    "name": "mihairu/reshak_parser",
+    "description": "GDZ Parser",
+    "type": "project",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Mihairu\\GDZParser\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "QuadVector",
+            "email": "info@quadvector.net"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "voku/simple_html_dom": "^4.8",
+        "league/climate": "^3.10"
+    }
+}
