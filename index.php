@@ -1,16 +1,28 @@
 <?php
 
-use Mihairu\GDZParser\GDZParserConfig;
-
 require_once("vendor/autoload.php");
 
 use Mihairu\GDZParser\GDZParser;
+use Mihairu\GDZParser\GDZParserConfig;
 use Mihairu\GDZParser\BookParser\ReshakBookParser;
-use Mihairu\GDZParser\Network\Proxy;
+use Mihairu\GDZParser\TaskListParser\ReshakTaskListParser;
+use Mihairu\GDZParser\Helper\Proxy;
 
 $GDZParser = new GDZParser(
     new GDZParserConfig(
         BookParser: new ReshakBookParser(),
+        TaskListParser: new ReshakTaskListParser(),
+        StartURLs: [
+            "https://reshak.ru/tag/3klass.html",
+            "https://reshak.ru/tag/4klass.html",
+            "https://reshak.ru/tag/5klass.html",
+            "https://reshak.ru/tag/6klass.html",
+            "https://reshak.ru/tag/7klass.html",
+            "https://reshak.ru/tag/8klass.html",
+            "https://reshak.ru/tag/9klass.html",
+            "https://reshak.ru/tag/10klass.html",
+            "https://reshak.ru/tag/11klass.html",
+        ],
         Proxies: array_map(function (string $item) {
             return Proxy::fromString($item);
         }, [
@@ -34,7 +46,9 @@ $GDZParser = new GDZParser(
             "82.21.62.29:7793:mkubsocc:zt8bk98vbqn9",
             "72.46.138.131:6357:mkubsocc:zt8bk98vbqn9",
             "82.21.49.194:7457:mkubsocc:zt8bk98vbqn9"
-        ])
+        ]),
+        Attempts: 5,
+        Timeout: 5
     )
 );
 

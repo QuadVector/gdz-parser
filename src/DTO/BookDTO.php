@@ -12,12 +12,14 @@ final class BookDTO
 	 * @param string $title Название книги
 	 * @param string $author Автор
 	 * @param string $grade Класс
+	 * @param string $subject Название предмета
 	 * @param string $url Ссылка на задачи книги
 	 */
 	public function __construct(
 		public string $title,
 		public string $author,
 		public string $grade,
+		public string $subject,
 		public string $url,
 	) {}
 }

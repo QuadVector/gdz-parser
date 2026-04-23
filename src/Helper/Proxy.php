@@ -1,8 +1,8 @@
 <?php
 
-namespace Mihairu\GDZParser\Network;
+namespace Mihairu\GDZParser\Helper;
 
-use InvalidArgumentException;
+use \InvalidArgumentException;
 
 final class Proxy
 {
@@ -26,7 +26,7 @@ final class Proxy
 	 * @throws InvalidArgumentException
 	 * @return Proxy
 	 */
-	public static function fromString(string $proxy): self
+	public static function FromString(string $proxy): self
 	{
 		$parts = explode(':', trim($proxy));
 

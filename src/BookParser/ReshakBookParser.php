@@ -7,19 +7,21 @@ use Mihairu\GDZParser\DTO\BookDTO;
 use Mihairu\GDZParser\Exception\AccessDeniedException;
 use Mihairu\GDZParser\Exception\PageNotFoundException;
 use Mihairu\GDZParser\Exception\ParseException;
-use Mihairu\GDZParser\Network\CURL;
-use Mihairu\GDZParser\Network\Proxy;
+use Mihairu\GDZParser\Helper\CURL;
+use Mihairu\GDZParser\Helper\Proxy;
 use voku\helper\HtmlDomParser;
 
 class ReshakBookParser implements BookParserInterface
 {
 	const DOMAIN = "reshak.ru";
+
 	/**
 	 * Получить список книг
 	 * @param string $url Ссылка на страницу Reshak.ru с книгами
+	 * 
 	 * @return void
 	 */
-	public function parse(string $url = "", ?Proxy $proxy = null): array
+	public function parse(string $url = "", ?Proxy $proxy = null, ?int $timeout = null): array
 	{
 		//обработка относительных ссылок
 		if (!str_contains($url, self::DOMAIN) && (!str_contains("http://", self::DOMAIN) || !str_contains("https://", self::DOMAIN))) {
@@ -28,7 +30,7 @@ class ReshakBookParser implements BookParserInterface
 		}
 
 		// получаем HTML-код страницы страницы
-		$html = CURL::FileGetContents($url, $proxy);
+		$html = CURL::FileGetContents($url, $proxy, $timeout);
 		if (!$html) throw new PageNotFoundException("Can't open {$url}.");
 		if ($html === "Access Denied") throw new AccessDeniedException("Access denied for {$url}");
 
@@ -45,14 +47,17 @@ class ReshakBookParser implements BookParserInterface
 
 		$result = [];
 
+		// обрабатываем HTML код и собираем список книг
 		foreach ($domBooks as $bookNode) {
 			$linkNode = $bookNode->find("a", 0);
 			$titleNode = $bookNode->find(".subjectName", 0);
 			$dopTitleNode = $bookNode->find(".dopName", 0);
 			$authorNode = $bookNode->find(".author", 0);
+			$subjectNode = $bookNode->find(".subject", 0);
 			$gradeNode = $bookNode->find(".class-number", 0);
 
-			if (!$linkNode || !$titleNode || !$authorNode || !$gradeNode) {
+			// все данные по книге должны быть заполнены
+			if (!$linkNode || !$titleNode || !$authorNode || !$gradeNode || !$subjectNode) {
 				continue;
 			}
 
@@ -66,6 +71,7 @@ class ReshakBookParser implements BookParserInterface
 				title: $title,
 				author: trim($authorNode->plaintext),
 				grade: trim($gradeNode->plaintext),
+				subject: trim($subjectNode->plaintext),
 				url: trim($linkNode->href)
 			);
 		}

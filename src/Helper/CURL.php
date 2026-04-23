@@ -1,8 +1,8 @@
 <?php
 
-namespace Mihairu\GDZParser\Network;
+namespace Mihairu\GDZParser\Helper;
 
-use Mihairu\GDZParser\Network\Proxy;
+use Mihairu\GDZParser\Helper\Proxy;
 
 final class CURL
 {
@@ -10,9 +10,11 @@ final class CURL
 	 * Получить через CURL содержимое страницы
 	 * @param string $url Ссылка на страницу
 	 * @param ?Proxy $proxy прокси-сервер
+	 * @param ?int $timeout таймаут
+	 * 
 	 * @return bool|string HTML-код страницы
 	 */
-	public static function FileGetContents(string $url, ?Proxy $proxy = null)
+	public static function FileGetContents(string $url, ?Proxy $proxy = null, ?int $timeout = null)
 	{
 		$ch = curl_init();
 
@@ -20,9 +22,12 @@ final class CURL
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_URL, $url);
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, TRUE);
-		curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 		curl_setopt($ch, CURLOPT_ENCODING, '');
 		curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+
+		if (!is_null($timeout)) {
+			curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+		}
 
 		// имитируем настоящий браузер (эффективно для парсинга)
 		curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
