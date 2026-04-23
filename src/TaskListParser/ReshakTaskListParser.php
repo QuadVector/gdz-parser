@@ -15,7 +15,7 @@ use voku\helper\HtmlDomParser;
 
 class ReshakTaskListParser implements TaskListParserInterface
 {
-	const DOMAIN = "reshak.ru";
+	const DOMAIN = 'reshak.ru';
 
 	/**
 	 * Сделать ссылку абсолютной
@@ -44,52 +44,77 @@ class ReshakTaskListParser implements TaskListParserInterface
 	 * 
 	 * @return void
 	 */
-	public function parse(string $url = "", ?Proxy $proxy = null, ?int $timeout = null): array
+	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): array
 	{
-		//обработка относительных ссылок
-		if (!str_contains($url, self::DOMAIN) && (!str_contains("http://", self::DOMAIN) || !str_contains("https://", self::DOMAIN))) {
-			$url .= "https://" . self::DOMAIN . "/" . $url;
-			$url = str_replace(self::DOMAIN . "//", self::DOMAIN . "/", $url); //гарантируем только один слеш после домена
+		// обработка относительных ссылок
+		if (
+			!str_contains($url, self::DOMAIN)
+			&& !str_starts_with($url, 'http://')
+			&& !str_starts_with($url, 'https://')
+		) {
+			$url = 'https://' . self::DOMAIN . '/' . ltrim($url, '/');
 		}
 
-		// получаем HTML-код страницы страницы
+		// получаем HTML-код страницы
 		$html = CURL::FileGetContents($url, $proxy, $timeout);
-		if (!$html) throw new PageNotFoundException("Can't open {$url}.");
-		if ($html === "Access Denied") throw new AccessDeniedException("Access denied for {$url}");
+		if (!$html) {
+			throw new PageNotFoundException("Can't open {$url}.");
+		}
+		if ($html === 'Access Denied') {
+			throw new AccessDeniedException("Access denied for {$url}");
+		}
 
-		// обрабатываем HTML код и собираем список задач
+		// обрабатываем HTML код
 		$dom = HtmlDomParser::str_get_html($html);
+		unset($html); // чистим память
+
 		if (!$dom) {
 			throw new ParseException("Can't parse {$url}.");
 		}
 
+		// получаем контейнер со списком задач
 		$article = $dom->findOneOrFalse('article.lcol');
 		if (!$article) {
+			unset($dom); // чистим память
+
 			throw new ParseException("Can't find article.lcol on {$url}.");
 		}
 
 		$result = [];
 		$currentChapter = null;
 
+		// последовательно идем по дочерним элементам контейнера
 		foreach ($article->children() as $child) {
 			$classAttr = (string)($child->getAttribute('class') ?? '');
 			$classList = preg_split('/\s+/', trim($classAttr)) ?: [];
 
+			// текущая глава
 			if (in_array('subtitle', $classList, true)) {
 				$currentChapter = Text::CleanupText($child->plaintext);
+
+				unset($classAttr, $classList); // чистим память
 				continue;
 			}
 
+			// блок задач
 			if (in_array('razdel', $classList, true)) {
-				foreach ($child->find('a') as $a) {
+				$links = $child->find('a');
+
+				foreach ($links as $a) {
 					$href = trim((string)$a->getAttribute('href'));
 					$title = Text::CleanupText($a->plaintext);
 
+					// проверка на заполненность данных
 					if ($href === '' || $title === '') {
+						unset($href, $title); // чистим память
 						continue;
 					}
 
-					if (!str_contains($href, '/otvet/reshebniki.php') && !preg_match('#^https?://#i', $href)) {
+					if (
+						!str_contains($href, '/otvet/reshebniki.php')
+						&& !preg_match('#^https?://#i', $href)
+					) {
+						unset($href, $title); // чистим память
 						continue;
 					}
 
@@ -98,8 +123,24 @@ class ReshakTaskListParser implements TaskListParserInterface
 						chapter: $currentChapter,
 						url: $this->MakeAbsoluteURL($href)
 					);
+
+					// чистим память
+					unset(
+						$href,
+						$title
+					);
 				}
+
+				unset($links); // чистим память
 			}
+
+			unset($classAttr, $classList); // чистим память
+		}
+
+		// чистим память
+		unset($article, $currentChapter, $dom);
+		if (function_exists('gc_collect_cycles')) {
+			gc_collect_cycles();
 		}
 
 		return $result;

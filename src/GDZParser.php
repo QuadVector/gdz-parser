@@ -79,9 +79,9 @@ class GDZParser
 
 		// 			// выводим информацию о найденных книгах
 		// 			if ($booksCount == 0) {
-		// 				$this->cli->red()->out("No books found.");
+		// 				$this->cli->red()->out('No books found.');
 		// 			} else {
-		// 				$this->cli->green()->bold()->out("Found " . $booksCount . " books.");
+		// 				$this->cli->green()->bold()->out("Found {$booksCount} books.");
 		// 			}
 
 		// 			$successStartURLsCount++;
@@ -108,6 +108,6 @@ class GDZParser
 		// начинаем парсинг списков задач
 		$this->cli->green()->bold()->out('Parsing task lists...');
 
-		var_dump($this->TaskListParserContext->parse("https://reshak.ru/reshebniki/geometriya/10/atanasyan10-11/index.php", $this->getRandomProxy(), $this->Config->Timeout));
+		var_dump($this->TaskListParserContext->parse('https://reshak.ru/reshebniki/geometriya/10/atanasyan10-11/index.php', $this->getRandomProxy(), $this->Config->Timeout));
 	}
 }
