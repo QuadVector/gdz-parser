@@ -15,6 +15,7 @@ final class GDZParserConfig
 	 * @param string[] $StartURLs Начальные URL, где находятся книги
 	 * @param int $Attempts Количество попыток парсинга
 	 * @param int $Timeout Таймаут на выполнение одного CURL-запроса
+	 * @param ?string $ParseOutputFolder Папка, в которую сохранять результаты парсинга
 	 */
 	public function __construct(
 		public readonly BookParserInterface $BookParser,
@@ -22,7 +23,8 @@ final class GDZParserConfig
 		public readonly array $Proxies = [],
 		public readonly array $StartURLs = [],
 		public readonly int $Attempts = 5,
-		public readonly int $Timeout = 5
+		public readonly int $Timeout = 5,
+		public readonly ?string $ParseOutputFolder = null
 	) {
 		foreach ($this->Proxies as $proxy) {
 			if (!$proxy instanceof Proxy) {

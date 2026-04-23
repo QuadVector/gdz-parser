@@ -48,7 +48,8 @@ $GDZParser = new GDZParser(
             "82.21.49.194:7457:mkubsocc:zt8bk98vbqn9"
         ]),
         Attempts: 5,
-        Timeout: 5
+        Timeout: 5,
+        ParseOutputFolder: __DIR__ . "/output/"
     )
 );
 
