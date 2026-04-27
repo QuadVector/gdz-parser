@@ -5,7 +5,7 @@ namespace Mihairu\GDZParser;
 use Mihairu\GDZParser\GDZParserConfig;
 use Mihairu\GDZParser\BookParser\BookParserContext;
 use Mihairu\GDZParser\TaskListParser\TaskListParserContext;
-use Mihairu\GDZParser\TaskListParser\TaskParserContext;
+use Mihairu\GDZParser\TaskParser\TaskParserContext;
 use Mihairu\GDZParser\Helper\Proxy;
 use Mihairu\GDZParser\Exception\AccessDeniedException;
 use Mihairu\GDZParser\Exception\PageNotFoundException;

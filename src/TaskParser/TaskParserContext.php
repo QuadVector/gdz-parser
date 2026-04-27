@@ -1,9 +1,9 @@
 <?php
 
-namespace Mihairu\GDZParser\TaskListParser;
+namespace Mihairu\GDZParser\TaskParser;
 
 use Mihairu\GDZParser\DTO\TaskDTO;
-use Mihairu\GDZParser\TaskListParser\TaskParserInterface;
+use Mihairu\GDZParser\TaskParser\TaskParserInterface;
 use Mihairu\GDZParser\Helper\Proxy;
 
 class TaskParserContext

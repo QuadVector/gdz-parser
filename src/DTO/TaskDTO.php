@@ -2,6 +2,8 @@
 
 namespace Mihairu\GDZParser\DTO;
 
+use Mihairu\GDZParser\ValueObject\Base64Image;
+
 /**
  * DTO-класс с информацией о задаче
  */
@@ -12,7 +14,7 @@ final class TaskDTO
 	 * @param string $title Название задачи
 	 * @param string $url Ссылка на задачу
 	 * @param string $content Содержимое
-	 * @param string[] $base64Images Массив закодированных в base64 изображений, которые в дальнейшем могут быть сохранены в файл
+	 * @param Base64Image[] $base64Images Массив закодированных в base64 изображений
 	 */
 	public function __construct(
 		public string $title,

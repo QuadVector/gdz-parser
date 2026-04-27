@@ -1,8 +1,8 @@
 <?php
 
-namespace Mihairu\GDZParser\TaskListParser;
+namespace Mihairu\GDZParser\TaskParser;
 
-use Mihairu\GDZParser\TaskListParser\TaskParserInterface;
+use Mihairu\GDZParser\TaskParser\TaskParserInterface;
 use Mihairu\GDZParser\DTO\TaskDTO;
 use Mihairu\GDZParser\Exception\AccessDeniedException;
 use Mihairu\GDZParser\Exception\PageNotFoundException;
@@ -10,10 +10,11 @@ use Mihairu\GDZParser\Exception\ParseException;
 use Mihairu\GDZParser\Helper\CURL;
 use Mihairu\GDZParser\Helper\Proxy;
 use Mihairu\GDZParser\Helper\Text;
+use Mihairu\GDZParser\ValueObject\Base64Image;
 
 use voku\helper\HtmlDomParser;
 
-class ReshakTaskListParser implements TaskParserInterface
+class ReshakTaskParser implements TaskParserInterface
 {
 	const DOMAIN = 'reshak.ru';
 

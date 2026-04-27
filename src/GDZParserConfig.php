@@ -4,7 +4,7 @@ namespace Mihairu\GDZParser;
 
 use Mihairu\GDZParser\BookParser\BookParserInterface;
 use Mihairu\GDZParser\TaskListParser\TaskListParserInterface;
-use Mihairu\GDZParser\TaskListParser\TaskParserInterface;
+use Mihairu\GDZParser\TaskParser\TaskParserInterface;
 use Mihairu\GDZParser\Helper\Proxy;
 use InvalidArgumentException;
 
