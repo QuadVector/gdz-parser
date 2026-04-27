@@ -7,7 +7,6 @@ final class Text
 	/**
 	 * Очистить текст от лишних символов
 	 * @param string $text исходный текст
-	 * 
 	 * @return string
 	 */
 	public static function CleanupText(string $text): string

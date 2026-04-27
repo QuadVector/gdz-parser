@@ -18,7 +18,7 @@ class ReshakBookParser implements BookParserInterface
 
 	/**
 	 * Получить список книг
-	 * @param string $url Ссылка на страницу Reshak.ru с книгами
+	 * @param string $url Ссылка на страницу с книгами
 	 * 
 	 * @return void
 	 */

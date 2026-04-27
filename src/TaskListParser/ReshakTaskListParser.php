@@ -20,7 +20,6 @@ class ReshakTaskListParser implements TaskListParserInterface
 	/**
 	 * Сделать ссылку абсолютной
 	 * @param string $href Исходная ссылка
-	 * 
 	 * @return string
 	 */
 	private function MakeAbsoluteURL(string $href): string
@@ -40,8 +39,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 	/**
 	 * Получить список задач
-	 * @param string $url Ссылка на страницу Reshak.ru со списком задач
-	 * 
+	 * @param string $url Ссылка на страницу со списком задач
 	 * @return void
 	 */
 	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): array

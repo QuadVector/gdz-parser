@@ -22,7 +22,6 @@ class TaskListParserContext
 	/**
 	 * Установить парсер
 	 * @param TaskListParserInterface $parser Класс, реализующий интерфейс парсера списка задач TaskListParserInterface
-	 * 
 	 * @return void
 	 */
 	public function setParser(TaskListParserInterface $parser): void
@@ -35,7 +34,6 @@ class TaskListParserContext
 	 * @param string $url Ссылка на страницу с списком задач
 	 * @param ?Proxy $proxy Прокси
 	 * @param ?int $timeout Таймаут на выполнение одного CURL-запроса
-	 * 
 	 * @return TaskListItemDTO[]
 	 */
 	public function parse(string $url, ?Proxy $proxy = null, ?int $timeout = null): array

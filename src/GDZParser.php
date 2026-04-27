@@ -5,10 +5,10 @@ namespace Mihairu\GDZParser;
 use Mihairu\GDZParser\GDZParserConfig;
 use Mihairu\GDZParser\BookParser\BookParserContext;
 use Mihairu\GDZParser\TaskListParser\TaskListParserContext;
+use Mihairu\GDZParser\TaskListParser\TaskParserContext;
 use Mihairu\GDZParser\Helper\Proxy;
 use Mihairu\GDZParser\Exception\AccessDeniedException;
 use Mihairu\GDZParser\Exception\PageNotFoundException;
-use Mihairu\GDZParser\Exception\ParseException;
 
 use League\CLImate\CLImate;
 
@@ -18,6 +18,7 @@ class GDZParser
 	protected GDZParserConfig $Config; // класс с конфигурацией
 	protected BookParserContext $BookParserContext;
 	protected TaskListParserContext $TaskListParserContext;
+	protected TaskParserContext $TaskParserContext;
 
 	/**
 	 * Конструктор
@@ -31,6 +32,7 @@ class GDZParser
 		// инициализируем стратегии
 		$this->BookParserContext = new BookParserContext($this->Config->BookParser);
 		$this->TaskListParserContext = new TaskListParserContext($this->Config->TaskListParser);
+		$this->TaskParserContext = new TaskParserContext($this->Config->TaskParser);
 	}
 
 	/**
@@ -44,10 +46,9 @@ class GDZParser
 
 	/**
 	 * Запустить парсинг
-	 * @return void
-	 * 
 	 * @throws AccessDeniedException
 	 * @throws PageNotFoundException
+	 * @return void
 	 */
 	public function run(): void
 	{

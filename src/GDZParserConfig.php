@@ -4,6 +4,7 @@ namespace Mihairu\GDZParser;
 
 use Mihairu\GDZParser\BookParser\BookParserInterface;
 use Mihairu\GDZParser\TaskListParser\TaskListParserInterface;
+use Mihairu\GDZParser\TaskListParser\TaskParserInterface;
 use Mihairu\GDZParser\Helper\Proxy;
 use InvalidArgumentException;
 
@@ -11,15 +12,19 @@ final class GDZParserConfig
 {
 	/**
 	 * @param BookParserInterface $BookParser Контекст парсера книг
+	 * @param TaskListParserInterface $TaskListParser Контекст парсера списка заданий
+	 * @param TaskParserInterface $TaskParser Контекст парсера заданий
 	 * @param Proxy[] $Proxies Список прокси-серверов
 	 * @param string[] $StartURLs Начальные URL, где находятся книги
 	 * @param int $Attempts Количество попыток парсинга
 	 * @param int $Timeout Таймаут на выполнение одного CURL-запроса
 	 * @param ?string $ParseOutputFolder Папка, в которую сохранять результаты парсинга
+	 * @throws InvalidArgumentException
 	 */
 	public function __construct(
 		public readonly BookParserInterface $BookParser,
 		public readonly TaskListParserInterface $TaskListParser,
+		public readonly TaskParserInterface $TaskParser,
 		public readonly array $Proxies = [],
 		public readonly array $StartURLs = [],
 		public readonly int $Attempts = 5,

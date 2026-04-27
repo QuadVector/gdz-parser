@@ -11,7 +11,6 @@ final class CURL
 	 * @param string $url Ссылка на страницу
 	 * @param ?Proxy $proxy прокси-сервер
 	 * @param ?int $timeout таймаут
-	 * 
 	 * @return bool|string HTML-код страницы
 	 */
 	public static function FileGetContents(string $url, ?Proxy $proxy = null, ?int $timeout = null)

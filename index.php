@@ -6,12 +6,14 @@ use Mihairu\GDZParser\GDZParser;
 use Mihairu\GDZParser\GDZParserConfig;
 use Mihairu\GDZParser\BookParser\ReshakBookParser;
 use Mihairu\GDZParser\TaskListParser\ReshakTaskListParser;
+use Mihairu\GDZParser\TaskParser\ReshakTaskParser;
 use Mihairu\GDZParser\Helper\Proxy;
 
 $GDZParser = new GDZParser(
     new GDZParserConfig(
         BookParser: new ReshakBookParser(),
         TaskListParser: new ReshakTaskListParser(),
+        TaskParser: new ReshakTaskParser(),
         StartURLs: [
             "https://reshak.ru/tag/3klass.html",
             "https://reshak.ru/tag/4klass.html",
