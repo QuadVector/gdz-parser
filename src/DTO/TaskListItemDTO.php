@@ -15,8 +15,8 @@ final class TaskListItemDTO
 	 */
 	public function __construct(
 		public string $title,
-		public ?string $chapter = null,
-		public string $url
+		public string $url,
+		public ?string $chapter = null
 	) {}
 
 	/**
@@ -28,8 +28,8 @@ final class TaskListItemDTO
 	{
 		return new self(
 			$data['title'],
-			$data['chapter'],
-			$data['url']
+			$data['url'],
+			$data['chapter']
 		);
 	}
 }
