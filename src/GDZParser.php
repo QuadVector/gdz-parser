@@ -239,12 +239,6 @@ class GDZParser
 
 				unset($storedTasks); // очищаем память
 			} else {
-				// [OUTPUT] Создаем папку
-				if (!is_dir($bookFolderPath)) {
-					$this->cli->output("Folder {$bookFolderPath} not found. Creating...");
-					mkdir($bookFolderPath);
-				}
-
 				// Парсим список задач
 				for ($attempt = 1; $attempt <= $this->Config->Attempts; $attempt++) {
 					try {
@@ -252,7 +246,7 @@ class GDZParser
 							? round($taskListProgress / $totalBooksCount * 100)
 							: 0; // считаем прогресс в процентах для удобства
 
-						$this->cli->out("[{$tasksItemsProgressPercent}%] " . "Parsing task list for book \"{$bookItem["book"]->title}\"... (Attempt {$attempt} of {$this->Config->Attempts})");
+						$this->cli->out("[{$tasksItemsProgressPercent}%] " . "Parsing task list for book \"{$bookItem["book"]->title}\" (URL: {$bookItem["book"]->url})... (Attempt {$attempt} of {$this->Config->Attempts})");
 						$tasksItems = $this->TaskListParserContext->parse($bookItem["book"]->url, $this->getRandomProxy(), $this->Config->Timeout);
 
 						// обновляем счетчики
@@ -274,6 +268,12 @@ class GDZParser
 							$this->cli->red()->out('No task items list found.');
 						} else {
 							$this->cli->green()->bold()->out("Found {$tasksItemsCount} task items lists.");
+
+							// [OUTPUT] Создаем папку
+							if (!is_dir($bookFolderPath)) {
+								$this->cli->output("Folder {$bookFolderPath} not found. Creating...");
+								mkdir($bookFolderPath);
+							}
 
 							// [OUTPUT] Сохраняем информацию о списке задач в JSON-файл внутрь папки книги
 							$this->cli->output("Saving task items lists to {$bookFolderPath}\\taskList.json...");

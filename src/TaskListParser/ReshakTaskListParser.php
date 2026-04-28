@@ -29,7 +29,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 		// получаем HTML-код страницы
 		$html = CURL::FileGetContents($url, $proxy, $timeout);
-		
+
 		if (!$html) {
 			throw new PageNotFoundException("Can't open {$url}.");
 		}
@@ -85,7 +85,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 					}
 
 					if (
-						!str_contains($href, '/otvet/reshebniki.php')
+						!str_starts_with($href, '/otvet/')
 						&& !preg_match('#^https?://#i', $href)
 					) {
 						unset($href, $title); // чистим память
