@@ -109,7 +109,8 @@ class GDZParser
 					if (!is_array($parsedBooks)) {
 						continue;
 					}
-
+					
+					$totalBooksCount += count($parsedBooks);
 					foreach ($parsedBooks as $book) {
 						$booksList[] = [
 							"outputPath" => $outputStartURLFolderPath,
