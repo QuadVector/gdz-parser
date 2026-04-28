@@ -25,17 +25,11 @@ class ReshakBookParser implements BookParserInterface
 	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): array
 	{
 		// обработка относительных ссылок
-		if (
-			!str_contains($url, self::DOMAIN)
-			&& !str_starts_with($url, 'http://')
-			&& !str_starts_with($url, 'https://')
-		) {
-			$url = 'https://' . self::DOMAIN . '/' . ltrim($url, '/');
-		}
+		$url = Text::MakeAbsoluteURL(self::DOMAIN, $url);
 
 		// получаем HTML-код страницы
 		$html = CURL::FileGetContents($url, $proxy, $timeout);
-		
+
 		if (!$html) {
 			throw new PageNotFoundException("Can't open {$url}.");
 		}
@@ -93,7 +87,7 @@ class ReshakBookParser implements BookParserInterface
 				author: Text::CleanupText($authorNode->plaintext),
 				grade: Text::CleanupText($gradeNode->plaintext),
 				subject: Text::CleanupText($subjectNode->plaintext),
-				url: Text::CleanupText($linkNode->href)
+				url: Text::MakeAbsoluteURL(self::DOMAIN, Text::CleanupText($linkNode->href))
 			);
 
 			// чистим память

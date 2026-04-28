@@ -18,26 +18,6 @@ class ReshakTaskListParser implements TaskListParserInterface
 	const DOMAIN = 'reshak.ru';
 
 	/**
-	 * Сделать ссылку абсолютной
-	 * @param string $href Исходная ссылка
-	 * @return string
-	 */
-	private function MakeAbsoluteURL(string $href): string
-	{
-		$href = trim($href);
-
-		if ($href === '') {
-			return '';
-		}
-
-		if (preg_match('#^https?://#i', $href)) {
-			return $href;
-		}
-
-		return 'https://' . self::DOMAIN . '/' . ltrim($href, '/');
-	}
-
-	/**
 	 * Получить список задач
 	 * @param string $url Ссылка на страницу со списком задач
 	 * @return void
@@ -45,13 +25,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): array
 	{
 		// обработка относительных ссылок
-		if (
-			!str_contains($url, self::DOMAIN)
-			&& !str_starts_with($url, 'http://')
-			&& !str_starts_with($url, 'https://')
-		) {
-			$url = 'https://' . self::DOMAIN . '/' . ltrim($url, '/');
-		}
+		$url = Text::MakeAbsoluteURL(self::DOMAIN, $url);
 
 		// получаем HTML-код страницы
 		$html = CURL::FileGetContents($url, $proxy, $timeout);
@@ -121,7 +95,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 					$result[] = new TaskListItemDTO(
 						title: $title,
 						chapter: $currentChapter,
-						url: $this->MakeAbsoluteURL($href)
+						url: Text::MakeAbsoluteURL(self::DOMAIN, $href)
 					);
 
 					// чистим память

@@ -48,13 +48,7 @@ class ReshakTaskParser implements TaskParserInterface
 	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): TaskDTO
 	{
 		// обработка относительных ссылок
-		if (
-			!str_contains($url, self::DOMAIN)
-			&& !str_starts_with($url, 'http://')
-			&& !str_starts_with($url, 'https://')
-		) {
-			$url = 'https://' . self::DOMAIN . '/' . ltrim($url, '/');
-		}
+		$url = Text::MakeAbsoluteURL(self::DOMAIN, $url);
 
 		// получаем HTML-код страницы
 		$html = CURL::FileGetContents($url, $proxy, $timeout);

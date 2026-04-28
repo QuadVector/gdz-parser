@@ -123,4 +123,32 @@ final class Text
 
 		return $result !== '' ? $result : 'default';
 	}
+
+	/**
+	 * Сделать относительную ссылку абсолютной
+	 * @param string $domain Исходный домен (без протокола и слэша в конце)
+	 * @param string $href Относительная ссылка
+	 * @return string
+	 */
+	public static function MakeAbsoluteURL(string $domain, string $href): string
+	{
+		$domain = trim($domain);
+		$href = trim($href);
+
+		if ($href === '') {
+			return '';
+		}
+
+		// Уже абсолютная ссылка
+		if (preg_match('#^[a-z][a-z0-9+.-]*://#i', $href)) {
+			return $href;
+		}
+
+		// Protocol-relative ссылка
+		if (strpos($href, '//') === 0) {
+			return 'https:' . $href;
+		}
+
+		return 'https://' . rtrim($domain, '/') . '/' . ltrim($href, '/');
+	}
 }

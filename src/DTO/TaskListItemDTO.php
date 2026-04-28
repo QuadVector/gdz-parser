@@ -18,4 +18,18 @@ final class TaskListItemDTO
 		public ?string $chapter = null,
 		public string $url
 	) {}
+
+	/**
+	 * Создать объект из ассоциативного массива
+	 * @param array $data
+	 * @return TaskListItemDTO
+	 */
+	public static function FromArray(array $data): self
+	{
+		return new self(
+			$data['title'],
+			$data['chapter'],
+			$data['url']
+		);
+	}
 }

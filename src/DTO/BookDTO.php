@@ -22,4 +22,21 @@ final class BookDTO
 		public string $subject,
 		public string $url,
 	) {}
+
+
+	/**
+	 * Создать объект из ассоциативного массива
+	 * @param array $data
+	 * @return BookDTO
+	 */
+	public static function FromArray(array $data): self
+	{
+		return new self(
+			$data['title'],
+			$data['author'],
+			$data['grade'],
+			$data['subject'],
+			$data['url'],
+		);
+	}
 }

@@ -22,4 +22,19 @@ final class TaskDTO
 		public string $content,
 		public array $images
 	) {}
+
+	/**
+	 * Создать объект из ассоциативного массива
+	 * @param array $data
+	 * @return TaskDTO
+	 */
+	public static function FromArray(array $data): self
+	{
+		return new self(
+			$data['title'],
+			$data['url'],
+			$data['content'],
+			$data['images']
+		);
+	}
 }

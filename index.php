@@ -32,7 +32,7 @@ $GDZParser = new GDZParser(
         ]),
         Attempts: 5,
         Timeout: 5,
-        ParseOutputFolder: __DIR__ . "\\output\\"
+        ParseOutputFolder: __DIR__ . "\\output"
     )
 );
 
