@@ -55,9 +55,11 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 		// получаем HTML-код страницы
 		$html = CURL::FileGetContents($url, $proxy, $timeout);
+		
 		if (!$html) {
 			throw new PageNotFoundException("Can't open {$url}.");
 		}
+
 		if ($html === 'Access Denied') {
 			throw new AccessDeniedException("Access denied for {$url}");
 		}

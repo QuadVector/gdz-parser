@@ -3,6 +3,7 @@
 namespace Mihairu\GDZParser\ValueObject;
 
 use Mihairu\GDZParser\Helper\CURL;
+use Mihairu\GDZParser\Helper\Proxy;
 use Mihairu\GDZParser\Exception\AccessDeniedException;
 use Mihairu\GDZParser\Exception\EncodeException;
 use Mihairu\GDZParser\Exception\DecodeException;
@@ -62,7 +63,7 @@ class Base64Image
 	 * @throws EncodeException
 	 * @return Base64Image
 	 */
-	public static function fromUrl(string $url): self
+	public static function FromURL(string $url, ?Proxy $proxy = null, ?int $timeout = null): self
 	{
 		// проверки на корректный URL
 		if (!filter_var($url, FILTER_VALIDATE_URL)) {
@@ -75,7 +76,7 @@ class Base64Image
 		}
 
 		// получаем содержимое
-		$content = CURL::FileGetContents($url);
+		$content = CURL::FileGetImage($url, $proxy, $timeout);
 
 		// проверка полученного содержимого на корректность
 		if ($content === false) {
@@ -86,19 +87,9 @@ class Base64Image
 			throw new InvalidArgumentException("Empty response from {$url}");
 		}
 
-		$maxBytes = 5 * 1024 * 1024;
-		if (mb_strlen($content) > $maxBytes) {
-			throw new InvalidArgumentException("Image is too large: {$url}");
-		}
-
-		$imageInfo = @getimagesizefromstring($content);
-		if ($imageInfo === false) {
-			throw new InvalidArgumentException("Downloaded content is not a valid image: {$url}");
-		}
-
-		$base64 = base64_encode($content);
-
-		return new self($base64);
+		return new self(
+			base64_encode($content)
+		);
 	}
 
 	/**

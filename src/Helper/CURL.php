@@ -60,4 +60,55 @@ final class CURL
 		$data = mb_convert_encoding($data, 'UTF-8', 'windows-1251');
 		return $data;
 	}
+
+	/**
+	 * Получить изображение по URL
+	 *
+	 * @param string $url
+	 * @param ?Proxy $proxy
+	 * @param ?int $timeout
+	 * @return string|false Бинарные данные изображения или false при ошибке
+	 */
+	public static function FileGetImage(string $url, ?Proxy $proxy = null, ?int $timeout = null): string|false
+	{
+		$ch = curl_init($url);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+		curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+
+		if ($timeout !== null) {
+			curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+		}
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, [
+			'Accept: image/*,*/*;q=0.8',
+		]);
+
+		if ($proxy !== null) {
+			if (!empty($proxy->host) && !empty($proxy->port)) {
+				curl_setopt($ch, CURLOPT_PROXY, $proxy->host . ':' . $proxy->port);
+			}
+
+			if (!empty($proxy->login) && !empty($proxy->password)) {
+				curl_setopt($ch, CURLOPT_PROXYUSERPWD, $proxy->login . ':' . $proxy->password);
+			}
+		}
+
+		$data = curl_exec($ch);
+
+		if ($data === false) {
+			unset($ch);
+			return false;
+		}
+
+		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		unset($ch);
+
+		if ($httpCode !== 200) {
+			return false;
+		}
+
+		return $data;
+	}
 }

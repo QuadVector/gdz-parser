@@ -14,12 +14,12 @@ final class TaskDTO
 	 * @param string $title Название задачи
 	 * @param string $url Ссылка на задачу
 	 * @param string $content Содержимое
-	 * @param Base64Image[] $base64Images Массив закодированных в base64 изображений
+	 * @param Base64Image[] $images Массив закодированных в base64 изображений
 	 */
 	public function __construct(
 		public string $title,
 		public string $url,
 		public string $content,
-		public array $base64Images
+		public array $images
 	) {}
 }

@@ -28,12 +28,11 @@ $GDZParser = new GDZParser(
         Proxies: array_map(function (string $item) {
             return Proxy::fromString($item);
         }, [
-            "46.203.15.11:7012:mkubsocc:zt8bk98vbqn9",
             "45.56.137.220:9285:mkubsocc:zt8bk98vbqn9",
         ]),
         Attempts: 5,
         Timeout: 5,
-        ParseOutputFolder: __DIR__ . "/output/"
+        ParseOutputFolder: __DIR__ . "\\output\\"
     )
 );
 

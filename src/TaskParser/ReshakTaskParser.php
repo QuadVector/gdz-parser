@@ -2,6 +2,7 @@
 
 namespace Mihairu\GDZParser\TaskParser;
 
+use Exception;
 use Mihairu\GDZParser\TaskParser\TaskParserInterface;
 use Mihairu\GDZParser\DTO\TaskDTO;
 use Mihairu\GDZParser\Exception\AccessDeniedException;
@@ -57,9 +58,11 @@ class ReshakTaskParser implements TaskParserInterface
 
 		// получаем HTML-код страницы
 		$html = CURL::FileGetContents($url, $proxy, $timeout);
+
 		if (!$html) {
 			throw new PageNotFoundException("Can't open {$url}.");
 		}
+
 		if ($html === 'Access Denied') {
 			throw new AccessDeniedException("Access denied for {$url}");
 		}
@@ -72,16 +75,59 @@ class ReshakTaskParser implements TaskParserInterface
 			throw new ParseException("Can't parse {$url}.");
 		}
 
+		// получаем контейнер с содержимым задачи
+		$article = $dom->findOneOrFalse('article.lcol');
+		if (!$article) {
+			unset($dom); // чистим память
+
+			throw new ParseException("Can't find article.lcol on {$url}.");
+		}
+
+		// получаем заголовок задачи
 		$resultTitle = "";
-		$resultURL = "";
+
+		$resultTitleNode = $article->findOneOrFalse(".titleh1");
+		if ($resultTitleNode) {
+			$resultTitle = Text::CleanupText(strip_tags($resultTitleNode->innerText()));
+			unset($resultTitleNode); // чистим память
+		}
+
+		// получаем текст решения задачи
 		$resultContent = "";
-		$resultBase64Images = [];
+		$resultContentNode = $article->findOneOrFalse(".text_zad");
+
+		if ($resultContentNode) {
+			$resultContent = Text::CleanupText(strip_tags($resultContentNode->innerText()));
+			unset($resultContentNode); // чистим память
+		}
+
+		// получаем изображения, которые могут содержать решение задачи
+		$resultImages = [];
+		$resultImagesNodes = $article->findMultiOrFalse("div[class*='pic_otvet'] img");
+		if ($resultImagesNodes) {
+			foreach ($resultImagesNodes as $image) {
+				// получаем ссылку на изображение
+				$imageURL = $image->getAttribute("src");
+				if (empty($imageURL)) {
+					$imageURL = $image->getAttribute("data-src");
+				}
+				$imageURL = $this->MakeAbsoluteURL($imageURL);
+
+				// загружаем к себе изображение в base64 формате
+				try {
+					$imageObject = Base64Image::FromURL($imageURL, $proxy, $timeout);
+					$resultImages[] = $imageObject;
+				} catch (Exception $e) {
+					error_log($e->getMessage());
+				}
+			}
+		}
 
 		return new TaskDTO(
 			title: $resultTitle,
-			url: $resultURL,
+			url: $url,
 			content: $resultContent,
-			base64Images: $resultBase64Images
+			images: $resultImages
 		);
 	}
 }

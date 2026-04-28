@@ -7,8 +7,10 @@ use Mihairu\GDZParser\BookParser\BookParserContext;
 use Mihairu\GDZParser\TaskListParser\TaskListParserContext;
 use Mihairu\GDZParser\TaskParser\TaskParserContext;
 use Mihairu\GDZParser\Helper\Proxy;
+use Mihairu\GDZParser\Helper\Text;
 use Mihairu\GDZParser\Exception\AccessDeniedException;
 use Mihairu\GDZParser\Exception\PageNotFoundException;
+use Mihairu\GDZParser\Exception\ParseException;
 
 use League\CLImate\CLImate;
 
@@ -62,45 +64,71 @@ class GDZParser
 		$this->cli->green()->bold()->out('Start parsing...');
 		$this->cli->cyan()->out("Start URLs count: " . $startURLsCount);
 
+		// [OUTPUT] создаем папку с выходными данными
+		$this->cli->output("Checking outpuf folder...");
+		if (!is_dir($this->Config->ParseOutputFolder)) {
+			$this->cli->output("Folder {$this->Config->ParseOutputFolder} not found. Creating...");
+			mkdir($this->Config->ParseOutputFolder);
+		} else {
+			$this->cli->output("Folder {$this->Config->ParseOutputFolder} found.");
+		}
+
 		// начинаем парсить список учебников с входных URL
-		// $this->cli->out('Parsing books from start URLs...');
-		// $startURLsProgress = 0;
-		// foreach ($this->Config->StartURLs as $StartURL) {
-		// 	for ($attempt = 1; $attempt <= $this->Config->Attempts; $attempt++) {
-		// 		try {
-		// 			// парсим книги
-		// 			$startURLsProgressPercent = round($startURLsProgress / $startURLsCount * 100); // считаем прогресс в процентах для удобства
+		$this->cli->out('Parsing books from start URLs...');
+		$startURLsProgress = 0;
+		$booksList = [];
+		foreach ($this->Config->StartURLs as $StartURL) {
+			// [OUTPUT] Название папки с текущей ссылкой
+			$outputStartURLFolderName = Text::GenerateFolderNameFromURL($StartURL);
+			$ouputStartURLFolderPath = $this->Config->ParseOutputFolder . '\\' . $outputStartURLFolderName;
+			
+			if (is_dir($ouputStartURLFolderPath)) {
+				$this->cli->output("Folder {$ouputStartURLFolderPath} already exists. Skipping...");
+				continue;
+			} else {
+				for ($attempt = 1; $attempt <= $this->Config->Attempts; $attempt++) {
+					try {
+						// парсим книги
+						$startURLsProgressPercent = round($startURLsProgress / $startURLsCount * 100); // считаем прогресс в процентах для удобства
 
-		// 			$this->cli->out("[{$startURLsProgressPercent}%] " . "Parsing books from {$StartURL}... (Attempt {$attempt} of {$this->Config->Attempts})");
-		// 			$books = $this->BookParserContext->parse($StartURL, $this->getRandomProxy(), $this->Config->Timeout);
+						$this->cli->out("[{$startURLsProgressPercent}%] " . "Parsing books from {$StartURL}... (Attempt {$attempt} of {$this->Config->Attempts})");
+						$books = $this->BookParserContext->parse($StartURL, $this->getRandomProxy(), $this->Config->Timeout);
 
-		// 			// счетчики
-		// 			$booksCount = count($books);
-		// 			$totalBooksCount += $booksCount;
+						// счетчики
+						$booksCount = count($books);
+						$totalBooksCount += $booksCount;
 
-		// 			// выводим информацию о найденных книгах
-		// 			if ($booksCount == 0) {
-		// 				$this->cli->red()->out('No books found.');
-		// 			} else {
-		// 				$this->cli->green()->bold()->out("Found {$booksCount} books.");
-		// 			}
+						// добавляем книги в список
+						$booksList = array_merge($booksList, $books);
 
-		// 			$successStartURLsCount++;
-		// 			$startURLsProgress++;
+						// выводим информацию о найденных книгах
+						if ($booksCount == 0) {
+							$this->cli->red()->out('No books found.');
+						} else {
+							$this->cli->green()->bold()->out("Found {$booksCount} books.");
 
-		// 			break;
-		// 		} catch (AccessDeniedException $ex) {
-		// 			$failedStartURLsCount++;
-		// 			$this->cli->red()->out($ex->getMessage());
-		// 		} catch (PageNotFoundException $ex) {
-		// 			$failedStartURLsCount++;
-		// 			$this->cli->red()->out($ex->getMessage());
-		// 		} catch (ParseException $ex) {
-		// 			$failedStartURLsCount++;
-		// 			$this->cli->red()->out($ex->getMessage());
-		// 		}
-		// 	}
-		// }
+							// [OUTPUT] Создаем папку с соответствующей входной ссылкой, куда будет размещены будущие папки и файлы с книгами и задачами
+							$this->cli->output("Creating folder {$ouputStartURLFolderPath}...");
+							mkdir($ouputStartURLFolderPath);
+						}
+
+						$successStartURLsCount++;
+						$startURLsProgress++;
+
+						break;
+					} catch (AccessDeniedException $ex) {
+						$failedStartURLsCount++;
+						$this->cli->red()->out($ex->getMessage());
+					} catch (PageNotFoundException $ex) {
+						$failedStartURLsCount++;
+						$this->cli->red()->out($ex->getMessage());
+					} catch (ParseException $ex) {
+						$failedStartURLsCount++;
+						$this->cli->red()->out($ex->getMessage());
+					}
+				}
+			}
+		}
 
 		// завершаем парсинг книг
 		$this->cli->green()->bold()->out('Finished parsing books.');
@@ -108,7 +136,5 @@ class GDZParser
 
 		// начинаем парсинг списков задач
 		$this->cli->green()->bold()->out('Parsing task lists...');
-
-		var_dump($this->TaskListParserContext->parse('https://reshak.ru/reshebniki/geometriya/10/atanasyan10-11/index.php', $this->getRandomProxy(), $this->Config->Timeout));
 	}
 }
