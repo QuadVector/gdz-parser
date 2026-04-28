@@ -107,9 +107,10 @@ class GDZParser
 					$parsedBooks = json_decode(file_get_contents($parseFile), true);
 
 					if (!is_array($parsedBooks)) {
+						unset($parsedBooks);
 						continue;
 					}
-					
+
 					$totalBooksCount += count($parsedBooks);
 					foreach ($parsedBooks as $book) {
 						$booksList[] = [
@@ -118,11 +119,13 @@ class GDZParser
 						];
 					}
 
+					unset($book); // очищаем память после foreach
 					unset($parsedBooks); // очищаем память
 				}
 
 				// очищаем память
 				unset(
+					$parseFile,
 					$parseFiles,
 					$outputStartURLFolderName,
 					$outputStartURLFolderPath
@@ -172,6 +175,9 @@ class GDZParser
 							));
 						}
 
+						unset($book); // очищаем память после foreach
+						unset($books); // очищаем память
+
 						break;
 					} catch (AccessDeniedException $ex) {
 						$failedStartURLsCount++;
@@ -185,6 +191,12 @@ class GDZParser
 					}
 				}
 			}
+
+			unset(
+				$startURL,
+				$outputStartURLFolderName,
+				$outputStartURLFolderPath
+			); // очищаем память после обработки текущего URL
 		}
 
 		// завершаем парсинг книг
@@ -214,13 +226,18 @@ class GDZParser
 				$storedTasks = json_decode(file_get_contents($bookFolderPath . '\\taskList.json'), true);
 
 				if (is_array($storedTasks)) {
+					$totalTasksListCount += count($storedTasks);
 					foreach ($storedTasks as $taskItem) {
 						$tasksItemsList[] = [
 							"outputPath" => $bookFolderPath,
 							"tasksList" => TaskListItemDTO::FromArray($taskItem)
 						];
 					}
+
+					unset($taskItem); // очищаем память после foreach
 				}
+
+				unset($storedTasks); // очищаем память
 			} else {
 				// [OUTPUT] Создаем папку
 				if (!is_dir($bookFolderPath)) {
@@ -269,6 +286,9 @@ class GDZParser
 							));
 						}
 
+						unset($task); // очищаем память после foreach
+						unset($tasksItems); // очищаем память
+
 						break;
 					} catch (AccessDeniedException $ex) {
 						$failedTasksListCount++;
@@ -282,6 +302,15 @@ class GDZParser
 					}
 				}
 			}
+
+			unset(
+				$bookItem,
+				$bookFolderName,
+				$bookFolderPath
+			); // очищаем память после обработки текущей книги
 		}
+
+		// очищаем память после этапа парсинга списков задач
+		unset($booksList);
 	}
 }
