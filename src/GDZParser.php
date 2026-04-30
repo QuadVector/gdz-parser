@@ -123,8 +123,10 @@ class GDZParser
 						];
 					}
 
-					unset($book); // очищаем память после foreach
-					unset($parsedBooks); // очищаем память
+					unset(
+						$book,
+						$parsedBooks
+					); // очищаем память
 				}
 
 				// обновляем счетчик прогресса
@@ -183,8 +185,10 @@ class GDZParser
 							));
 						}
 
-						unset($book); // очищаем память после foreach
-						unset($books); // очищаем память
+						unset(
+							$book,
+							$books
+						);
 
 						break;
 					} catch (AccessDeniedException $ex) {
@@ -221,7 +225,7 @@ class GDZParser
 
 		// счетчики
 		$taskListProgress = 0;
-		$totalTasksListCount = 0;
+		$totalTasksCount = 0;
 		$successTasksListCount = 0;
 		$failedTasksListCount = 0;
 
@@ -242,7 +246,7 @@ class GDZParser
 				$storedTasks = json_decode(file_get_contents($bookFolderPath . '\\taskList.json'), true);
 
 				if (is_array($storedTasks)) {
-					$totalTasksListCount += count($storedTasks);
+					$totalTasksCount += count($storedTasks);
 					foreach ($storedTasks as $taskItem) {
 						$tasksItemsList[] = [
 							"outputPath" => $bookFolderPath,
@@ -271,7 +275,7 @@ class GDZParser
 
 						// обновляем счетчики
 						$tasksItemsCount = count($tasksItems);
-						$totalTasksListCount += $tasksItemsCount;
+						$totalTasksCount += $tasksItemsCount;
 						$taskListProgress++;
 						$successTasksListCount++;
 
@@ -306,8 +310,10 @@ class GDZParser
 							));
 						}
 
-						unset($task); // очищаем память после foreach
-						unset($tasksItems); // очищаем память
+						unset(
+							$task,
+							$tasksItems
+						); // очищаем память
 
 						break;
 					} catch (AccessDeniedException $ex) {
@@ -333,9 +339,88 @@ class GDZParser
 		// завершаем парсинг списка задач
 		$this->cli->br();
 		$this->cli->out('<bold><green>Finished parsing task lists.</green></bold>');
-		$this->cli->out("<bold><cyan>Total tasks count:</cyan></bold> {$totalTasksListCount}");
+		$this->cli->out("<bold><cyan>Total tasks count:</cyan></bold> {$totalTasksCount}");
 		$this->cli->out("<bold><green>Success parsed task lists count:</green></bold> {$successTasksListCount}");
 		$this->cli->out("<bold><red>Failed parsed task lists count:</red></bold> {$failedTasksListCount}");
+		$this->cli->br();
+
+		// начинаем парсить каждую задачу
+		$this->cli->output("<bold><green>Start parsing tasks...</green></bold>");
+		// счетчики
+		$successParsedTasksCount = 0;
+		$failedParsedTasksCount = 0;
+		$tasksProgress = 0;
+
+
+		foreach ($tasksItemsList as $tasksItemsListItem) {
+			$tasksProgressPercent = round($tasksProgress / $totalTasksCount * 100); // считаем прогресс в процентах для удобства
+
+			// [OUTPUT] Название папки с текущей ссылкой
+			$outputTaskFolderName = Text::TranslitRef($tasksItemsListItem["tasksList"]->chapter) . "-" . Text::TranslitRef($tasksItemsListItem["tasksList"]->title); // название файла, который будет сохранен
+			$outputStartURLFolderPath = $tasksItemsListItem["outputPath"]; // директория, где будет находиться задача, совпадает с директорией списка задач, т.к. это конечный элемент
+			$outputTaskFullFileName = $outputStartURLFolderPath . self::DIRECTORY_SEPARATOR . $outputTaskFolderName . '.json';
+
+			if (file_exists($outputTaskFullFileName)) {
+				// [OUTPUT] Пропускаем, т.к. файл уже существует, и его парсить не требуется
+				$this->cli->output("<dim>[{$tasksProgressPercent}%]</dim> File <yellow>{$outputTaskFullFileName}</yellow> already exists. Skipping...");
+
+				// обновляем счетчик прогресса
+				$tasksProgress++;
+				$successParsedTasksCount++;
+				continue;
+			} else {
+				for ($attempt = 1; $attempt <= $this->Config->Attempts; $attempt++) {
+					try {
+						// парсим задачу
+						$tasksProgressPercent = round($tasksProgress / $totalTasksCount * 100); // считаем прогресс в процентах для удобства
+
+						$this->cli->out("<dim>[{$tasksProgressPercent}%]</dim> " . "Parsing task from {$tasksItemsListItem["tasksList"]->url}... (Attempt {$attempt} of {$this->Config->Attempts})");
+						$taskInfo = $this->TaskParserContext->parse($tasksItemsListItem["tasksList"]->url, $this->getRandomProxy(), $this->Config->Timeout);
+
+						// обновляем счетчики
+						$totalTasksCount++;
+						$successParsedTasksCount++;
+						$tasksProgress++;
+
+						$this->cli->green()->bold()->out("<green>Parsed successfully.</green>");
+
+						// [OUTPUT] Сохраняем информацию о задаче в JSON-файл
+						$this->cli->output("Saving data to <yellow>{$outputTaskFullFileName}</yellow>...");
+
+						file_put_contents($outputTaskFullFileName, json_encode(
+							$taskInfo,
+							JSON_UNESCAPED_UNICODE
+						));
+
+						unset($taskInfo); // очищаем память после foreach
+
+						break;
+					} catch (AccessDeniedException $ex) {
+						$failedParsedTasksCount++;
+						$this->cli->red()->out($ex->getMessage());
+					} catch (PageNotFoundException $ex) {
+						$failedParsedTasksCount++;
+						$this->cli->red()->out($ex->getMessage());
+					} catch (ParseException $ex) {
+						$failedParsedTasksCount++;
+						$this->cli->red()->out($ex->getMessage());
+					}
+				}
+			}
+
+			unset(
+				$outputTaskFolderName,
+				$outputStartURLFolderPath,
+				$outputTaskFullFileName
+			);
+		}
+
+		// завершаем парсинг книг
+		$this->cli->br();
+		$this->cli->out('<bold><green>Finished parsing tasks.</green></bold>');
+		$this->cli->out("<bold><cyan>Total tasks count:</cyan></bold> {$totalTasksCount}");
+		$this->cli->out("<bold><green>Success parsed start URLs count:</green></bold> {$successParsedTasksCount}");
+		$this->cli->out("<bold><red>Failed parsed start URLs count:</red></bold> {$failedParsedTasksCountc}");
 		$this->cli->br();
 	}
 }

@@ -110,7 +110,7 @@ class ReshakTaskParser implements TaskParserInterface
 				// загружаем к себе изображение в base64 формате
 				try {
 					$imageObject = Base64Image::FromURL($imageURL, $proxy, $timeout);
-					$resultImages[] = $imageObject;
+					$resultImages[] = $imageObject->GetBase64();
 				} catch (Exception $e) {
 					error_log($e->getMessage());
 				}

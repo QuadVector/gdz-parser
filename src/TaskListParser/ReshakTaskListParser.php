@@ -75,9 +75,10 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 	/**
 	 * Парсинг старого формата: subtitle + razdel
+	 * @param object $article Объект Simple PHP DOM
 	 * @return TaskListItemDTO[]
 	 */
-	private function parseOldFormat($article): array
+	private function parseOldFormat(object $article): array
 	{
 		$result = [];
 		$currentChapter = null;
@@ -148,9 +149,11 @@ class ReshakTaskListParser implements TaskListParserInterface
 	 *   ...
 	 * </ul>
 	 *
+	 * @param object $article Объект Simple PHP DOM
+	 * 
 	 * @return TaskListItemDTO[]
 	 */
-	private function parseNewFormat($article): array
+	private function parseNewFormat(object $article): array
 	{
 		$result = [];
 
@@ -204,8 +207,12 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 	/**
 	 * Обработка блока submenu: парсим пары partName/partContent
+	 * 
+	 * @param object $li Объект Simple PHP DOM
+	 * @param string|null $currentChapter Текущая глава
+	 * @param array $result Список задач
 	 */
-	private function parseSubmenuBlock($li, ?string $currentChapter, array &$result): void
+	private function parseSubmenuBlock(object $li, ?string $currentChapter, array &$result): void
 	{
 		// Внутри submenu ищем div.sublnk1, в котором чередуются partName и блоки ссылок
 		$sublnk1 = $li->findOneOrFalse('div.sublnk1');
@@ -243,8 +250,13 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 	/**
 	 * Парсинг ссылок внутри блока задач
+	 * 
+	 * @param object $block Объект Simple PHP DOM
+	 * @param string|null $currentChapter Текущая глава
+	 * @param string|null $currentPartName Текущая подглава
+	 * @param array $result Список задач
 	 */
-	private function parseLinksBlock($block, ?string $currentChapter, ?string $currentPartName, array &$result): void
+	private function parseLinksBlock(object $block, ?string $currentChapter, ?string $currentPartName, array &$result): void
 	{
 		$links = $block->find('a');
 
@@ -278,6 +290,9 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 	/**
 	 * Проверка, что ссылка ведёт на задачу/ответ
+	 * 
+	 * @param string $href Ссылка
+	 * @return bool
 	 */
 	private function isTaskHref(string $href): bool
 	{
@@ -307,6 +322,11 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 	/**
 	 * Формирование названия главы с учётом подраздела
+	 * 
+	 * @param string|null $currentChapter Текущая глава
+	 * @param string|null $currentPartName Текущая подглава
+	 * 
+	 * @return string|null
 	 */
 	private function makeChapterTitle(?string $currentChapter, ?string $currentPartName): ?string
 	{
