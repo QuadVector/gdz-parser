@@ -20,7 +20,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 	/**
 	 * Получить список задач
 	 * @param string $url Ссылка на страницу со списком задач
-	 * @return void
+	 * @return TaskListItemDTO[]
 	 */
 	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): array
 	{
@@ -55,9 +55,33 @@ class ReshakTaskListParser implements TaskListParserInterface
 		}
 
 		$result = [];
+
+		// ===== Вариант 1: старый формат (subtitle + razdel) =====
+		$result = $this->parseOldFormat($article);
+
+		// ===== Вариант 2: новый формат (slide-menu-index с sublnk + submenu) =====
+		if (empty($result)) {
+			$result = $this->parseNewFormat($article);
+		}
+
+		// чистим память
+		unset($article, $dom);
+		if (function_exists('gc_collect_cycles')) {
+			gc_collect_cycles();
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Парсинг старого формата: subtitle + razdel
+	 * @return TaskListItemDTO[]
+	 */
+	private function parseOldFormat($article): array
+	{
+		$result = [];
 		$currentChapter = null;
 
-		// последовательно идем по дочерним элементам контейнера
 		foreach ($article->children() as $child) {
 			$classAttr = (string)($child->getAttribute('class') ?? '');
 			$classList = preg_split('/\s+/', trim($classAttr)) ?: [];
@@ -99,10 +123,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 					);
 
 					// чистим память
-					unset(
-						$href,
-						$title
-					);
+					unset($href, $title);
 				}
 
 				unset($links); // чистим память
@@ -111,12 +132,147 @@ class ReshakTaskListParser implements TaskListParserInterface
 			unset($classAttr, $classList); // чистим память
 		}
 
-		// чистим память
-		unset($article, $currentChapter, $dom);
-		if (function_exists('gc_collect_cycles')) {
-			gc_collect_cycles();
-		}
+		unset($currentChapter); // чистим память
 
 		return $result;
+	}
+
+	/**
+	 * Парсинг нового формата: #extremum-slide-menu-index с sublnk/submenu и partName/partContent
+	 *
+	 * Структура:
+	 * <ul#slidemenu>
+	 *   <li><span class="sublnk">Юнит 1</span></li>        ← глава (chapter)
+	 *   <li class="submenu">                                 ← блок задач
+	 *     <div class="partName">Step 1:</div>               ← подглава (subchapter)
+	 *     <div class="partContent"><a>...</a></div>          ← ссылки на задачи
+	 *   </li>
+	 *   ...
+	 * </ul>
+	 *
+	 * @return TaskListItemDTO[]
+	 */
+	private function parseNewFormat($article): array
+	{
+		$result = [];
+
+		$slideMenu = $article->findOneOrFalse('#slidemenu');
+		if (!$slideMenu) {
+			// пробуем найти по id контейнера
+			$container = $article->findOneOrFalse('#extremum-slide-menu-index');
+			if ($container) {
+				$slideMenu = $container->findOneOrFalse('ul.reset-index');
+			}
+			unset($container);
+		}
+
+		if (!$slideMenu) {
+			return $result;
+		}
+
+		$currentChapter = null;
+
+		foreach ($slideMenu->children() as $li) {
+			$tag = strtolower((string)$li->tag);
+			if ($tag !== 'li') {
+				continue;
+			}
+
+			$classAttr = (string)($li->getAttribute('class') ?? '');
+			$classList = preg_split('/\s+/', trim($classAttr)) ?: [];
+
+			// Элемент с классом "submenu" — блок задач для текущей главы
+			if (in_array('submenu', $classList, true)) {
+				$this->parseSubmenuBlock($li, $currentChapter, $result);
+
+				unset($classAttr, $classList);
+				continue;
+			}
+
+			// Элемент без класса "submenu" — ищем span.sublnk (название главы)
+			$sublnk = $li->findOneOrFalse('span.sublnk');
+			if ($sublnk) {
+				$currentChapter = Text::CleanupText($sublnk->plaintext);
+				unset($sublnk);
+			}
+
+			unset($classAttr, $classList);
+		}
+
+		unset($slideMenu, $currentChapter);
+
+		return $result;
+	}
+
+	/**
+	 * Обработка блока submenu: парсим пары partName/partContent
+	 */
+	private function parseSubmenuBlock($li, ?string $currentChapter, array &$result): void
+	{
+		// Внутри submenu ищем div.sublnk1, в котором чередуются partName и partContent
+		$sublnk1 = $li->findOneOrFalse('div.sublnk1');
+		if (!$sublnk1) {
+			// fallback: ищем partContent напрямую внутри li
+			$sublnk1 = $li;
+		}
+
+		$currentPartName = null;
+
+		foreach ($sublnk1->children() as $child) {
+			$childClass = (string)($child->getAttribute('class') ?? '');
+
+			if ($childClass === 'partName') {
+				// Название подраздела (Step 1:, Тест 1:, Reading Class One: и т.д.)
+				$partText = Text::CleanupText($child->plaintext);
+				// убираем завершающее двоеточие для чистоты
+				$currentPartName = rtrim($partText, ':');
+				unset($partText);
+				continue;
+			}
+
+			if ($childClass === 'partContent') {
+				$links = $child->find('a');
+
+				foreach ($links as $a) {
+					$href = trim((string)$a->getAttribute('href'));
+					$title = Text::CleanupText($a->plaintext);
+
+					if ($href === '' || $title === '') {
+						unset($href, $title);
+						continue;
+					}
+
+					if (
+						!str_starts_with($href, '/otvet/')
+						&& !preg_match('#^https?://#i', $href)
+					) {
+						unset($href, $title);
+						continue;
+					}
+
+					// Формируем составной chapter: "Юнит 1 — Step 1"
+					$chapter = $currentChapter;
+					if ($currentPartName !== null && $currentPartName !== '') {
+						$chapter = $chapter !== null
+							? $currentChapter . ' — ' . $currentPartName
+							: $currentPartName;
+					}
+
+					$result[] = new TaskListItemDTO(
+						title: $title,
+						chapter: $chapter,
+						url: Text::MakeAbsoluteURL(self::DOMAIN, $href)
+					);
+
+					unset($href, $title, $chapter);
+				}
+
+				unset($links);
+			}
+
+			unset($childClass);
+		}
+
+		unset($sublnk1, $currentPartName);
 	}
 }

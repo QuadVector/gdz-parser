@@ -83,13 +83,15 @@ class GDZParser
 		$booksList = []; // список обрабатываемых книг
 
 		foreach ($this->Config->StartURLs as $startURL) {
+			$startURLsProgressPercent = round($startURLsProgress / $startURLsCount * 100); // считаем прогресс в процентах для удобства
+
 			// [OUTPUT] Название папки с текущей ссылкой
 			$outputStartURLFolderName = Text::GenerateFolderNameFromURL($startURL);
 			$outputStartURLFolderPath = $this->Config->ParseOutputFolder . self::DIRECTORY_SEPARATOR . $outputStartURLFolderName;
 
 			if (is_dir($outputStartURLFolderPath)) {
 				// [OUTPUT] Пропускаем и формируем список не из парсера, а из исходных файлов
-				$this->cli->output("Folder {$outputStartURLFolderPath} already exists. Skipping...");
+				$this->cli->output("[{$startURLsProgressPercent}%] Folder {$outputStartURLFolderPath} already exists. Skipping...");
 
 				// [OUTPUT] формируем список файлов, где хранится информация о книгах
 				$parseFiles = scandir($outputStartURLFolderPath);
@@ -122,6 +124,9 @@ class GDZParser
 					unset($book); // очищаем память после foreach
 					unset($parsedBooks); // очищаем память
 				}
+
+				// обновляем счетчик прогресса
+				$startURLsProgress++;
 
 				// очищаем память
 				unset(
@@ -220,7 +225,11 @@ class GDZParser
 
 			// [OUTPUT] Проверяем папку на существование
 			if (is_dir($bookFolderPath) && file_exists($bookFolderPath . '\\taskList.json')) {
-				$this->cli->output("Task list for book \"{$bookItem["book"]->title}\" already parsed. Skipping...");
+				$tasksItemsProgressPercent = $totalBooksCount > 0
+					? round($taskListProgress / $totalBooksCount * 100)
+					: 0;
+					
+				$this->cli->output("[{$tasksItemsProgressPercent}%] Task list for book \"{$bookItem["book"]->title}\" already parsed. Skipping...");
 
 				// [OUTPUT] восстанавливаем список задач
 				$storedTasks = json_decode(file_get_contents($bookFolderPath . '\\taskList.json'), true);
@@ -236,6 +245,9 @@ class GDZParser
 
 					unset($taskItem); // очищаем память после foreach
 				}
+
+				// обновляем счетчик прогресса
+				$taskListProgress++;
 
 				unset($storedTasks); // очищаем память
 			} else {
