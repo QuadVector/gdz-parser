@@ -66,16 +66,18 @@ class GDZParser
 		$startURLsProgress = 0;
 
 		// выводим приветствие
-		$this->cli->green()->bold()->out('Start parsing...');
-		$this->cli->cyan()->out("Start URLs count: " . $startURLsCount);
+		$this->cli->br();
+		$this->cli->out('<bold><green>Start parsing...</green></bold>');
+		$this->cli->out("<bold><cyan>Start URLs count:</cyan></bold> {$startURLsCount}");
+		$this->cli->br();
 
 		// [OUTPUT] создаем папку с выходными данными
 		$this->cli->output("Checking output folder...");
 		if (!is_dir($this->Config->ParseOutputFolder)) {
-			$this->cli->output("Folder {$this->Config->ParseOutputFolder} not found. Creating...");
+			$this->cli->output("Folder <yellow>{$this->Config->ParseOutputFolder}</yellow> not found. Creating...");
 			mkdir($this->Config->ParseOutputFolder);
 		} else {
-			$this->cli->output("Folder {$this->Config->ParseOutputFolder} found.");
+			$this->cli->output("Folder <yellow>{$this->Config->ParseOutputFolder}</yellow> found.");
 		}
 
 		// начинаем парсить список учебников с входных URL
@@ -91,7 +93,7 @@ class GDZParser
 
 			if (is_dir($outputStartURLFolderPath)) {
 				// [OUTPUT] Пропускаем и формируем список не из парсера, а из исходных файлов
-				$this->cli->output("[{$startURLsProgressPercent}%] Folder {$outputStartURLFolderPath} already exists. Skipping...");
+				$this->cli->output("<dim>[{$startURLsProgressPercent}%]</dim> Folder <yellow>{$outputStartURLFolderPath}</yellow> already exists. Skipping...");
 
 				// [OUTPUT] формируем список файлов, где хранится информация о книгах
 				$parseFiles = scandir($outputStartURLFolderPath);
@@ -127,6 +129,7 @@ class GDZParser
 
 				// обновляем счетчик прогресса
 				$startURLsProgress++;
+				$successStartURLsCount++;
 
 				// очищаем память
 				unset(
@@ -142,7 +145,7 @@ class GDZParser
 						// парсим книги
 						$startURLsProgressPercent = round($startURLsProgress / $startURLsCount * 100); // считаем прогресс в процентах для удобства
 
-						$this->cli->out("[{$startURLsProgressPercent}%] " . "Parsing books from {$startURL}... (Attempt {$attempt} of {$this->Config->Attempts})");
+						$this->cli->out("<dim>[{$startURLsProgressPercent}%]</dim> " . "Parsing books from {$startURL}... (Attempt {$attempt} of {$this->Config->Attempts})");
 						$books = $this->BookParserContext->parse($startURL, $this->getRandomProxy(), $this->Config->Timeout);
 
 						// обновляем счетчики
@@ -166,11 +169,11 @@ class GDZParser
 							$this->cli->green()->bold()->out("Found {$booksCount} books.");
 
 							// [OUTPUT] Создаем папку с соответствующей входной ссылкой, куда будет размещены будущие папки и файлы с книгами и задачами
-							$this->cli->output("Creating folder {$outputStartURLFolderPath}...");
+							$this->cli->output("Creating folder <yellow>{$outputStartURLFolderPath}</yellow>...");
 							mkdir($outputStartURLFolderPath);
 
 							// [OUTPUT] Сохраняем информацию о книгах в JSON-файл внутрь папки
-							$this->cli->output("Saving books info to {$outputStartURLFolderPath}\\books.json...");
+							$this->cli->output("Saving books info to <yellow>{$outputStartURLFolderPath}\\books.json...</yellow>");
 							file_put_contents($outputStartURLFolderPath . '\\books.json', json_encode(
 								// убираем лишние данные, сохраняя только список книг текущего URL
 								array_map(function ($book) {
@@ -205,11 +208,15 @@ class GDZParser
 		}
 
 		// завершаем парсинг книг
-		$this->cli->green()->bold()->out('Finished parsing books.');
-		$this->cli->cyan()->out("Total books count: {$totalBooksCount}");
+		$this->cli->br();
+		$this->cli->out('<bold><green>Finished parsing books.</green></bold>');
+		$this->cli->out("<bold><cyan>Total books count:</cyan></bold> {$totalBooksCount}");
+		$this->cli->out("<bold><green>Success parsed start URLs count:</green></bold> {$successStartURLsCount}");
+		$this->cli->out("<bold><red>Failed parsed start URLs count:</red></bold> {$failedStartURLsCount}");
+		$this->cli->br();
 
 		// начинаем парсинг списков задач
-		$this->cli->green()->bold()->out('Parsing task items lists...');
+		$this->cli->out('<bold><green>Parsing task items lists...</green></bold>');
 		$tasksItemsList = [];
 
 		// счетчики
@@ -228,8 +235,8 @@ class GDZParser
 				$tasksItemsProgressPercent = $totalBooksCount > 0
 					? round($taskListProgress / $totalBooksCount * 100)
 					: 0;
-					
-				$this->cli->output("[{$tasksItemsProgressPercent}%] Task list for book \"{$bookItem["book"]->title}\" already parsed. Skipping...");
+
+				$this->cli->output("<dim>[{$tasksItemsProgressPercent}%]</dim> Task list for book <yellow>{$bookItem['book']->title}</yellow> already parsed. Skipping...");
 
 				// [OUTPUT] восстанавливаем список задач
 				$storedTasks = json_decode(file_get_contents($bookFolderPath . '\\taskList.json'), true);
@@ -248,6 +255,7 @@ class GDZParser
 
 				// обновляем счетчик прогресса
 				$taskListProgress++;
+				$successTasksListCount++;
 
 				unset($storedTasks); // очищаем память
 			} else {
@@ -258,7 +266,7 @@ class GDZParser
 							? round($taskListProgress / $totalBooksCount * 100)
 							: 0; // считаем прогресс в процентах для удобства
 
-						$this->cli->out("[{$tasksItemsProgressPercent}%] " . "Parsing task list for book \"{$bookItem["book"]->title}\" (URL: {$bookItem["book"]->url})... (Attempt {$attempt} of {$this->Config->Attempts})");
+						$this->cli->out("<dim>[{$tasksItemsProgressPercent}%]</dim> " . "Parsing task list for book <yellow>{$bookItem['book']->title}</yellow> (<bold>URL:</bold> <yellow>{$bookItem['book']->url})</yellow>... (Attempt <yellow>{$attempt}</yellow> of <yellow>{$this->Config->Attempts}</yellow>)");
 						$tasksItems = $this->TaskListParserContext->parse($bookItem["book"]->url, $this->getRandomProxy(), $this->Config->Timeout);
 
 						// обновляем счетчики
@@ -283,12 +291,12 @@ class GDZParser
 
 							// [OUTPUT] Создаем папку
 							if (!is_dir($bookFolderPath)) {
-								$this->cli->output("Folder {$bookFolderPath} not found. Creating...");
+								$this->cli->output("Folder <yellow>{$bookFolderPath}</yellow> not found. Creating...");
 								mkdir($bookFolderPath);
 							}
 
 							// [OUTPUT] Сохраняем информацию о списке задач в JSON-файл внутрь папки книги
-							$this->cli->output("Saving task items lists to {$bookFolderPath}\\taskList.json...");
+							$this->cli->output("Saving task items lists to <yellow>{$bookFolderPath}\\taskList.json...</yellow>");
 							file_put_contents($bookFolderPath . '\\taskList.json', json_encode(
 								// сохраняем только список задач текущей книги
 								array_map(function ($taskItem) {
@@ -322,7 +330,12 @@ class GDZParser
 			); // очищаем память после обработки текущей книги
 		}
 
-		// очищаем память после этапа парсинга списков задач
-		unset($booksList);
+		// завершаем парсинг списка задач
+		$this->cli->br();
+		$this->cli->out('<bold><green>Finished parsing task lists.</green></bold>');
+		$this->cli->out("<bold><cyan>Total tasks count:</cyan></bold> {$totalTasksListCount}");
+		$this->cli->out("<bold><green>Success parsed task lists count:</green></bold> {$successTasksListCount}");
+		$this->cli->out("<bold><red>Failed parsed task lists count:</red></bold> {$failedTasksListCount}");
+		$this->cli->br();
 	}
 }
