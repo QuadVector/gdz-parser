@@ -81,7 +81,7 @@ class GDZParser
 		}
 
 		// начинаем парсить список учебников с входных URL
-		$this->cli->out('Parsing books from start URLs...');
+		$this->cli->out('<bold><green>Parsing books from start URLs...</green></bold>');
 		$booksList = []; // список обрабатываемых книг
 
 		foreach ($this->Config->StartURLs as $startURL) {
@@ -93,7 +93,7 @@ class GDZParser
 
 			if (is_dir($outputStartURLFolderPath)) {
 				// [OUTPUT] Пропускаем и формируем список не из парсера, а из исходных файлов
-				$this->cli->output("<dim>[{$startURLsProgressPercent}%]</dim> Folder <yellow>{$outputStartURLFolderPath}</yellow> already exists. Skipping...");
+				$this->cli->output("<dim>[{$startURLsProgress} / {$startURLsCount}]</dim> <dim>[{$startURLsProgressPercent}%]</dim> Folder <yellow>{$outputStartURLFolderPath}</yellow> already exists. Skipping...");
 
 				// [OUTPUT] формируем список файлов, где хранится информация о книгах
 				$parseFiles = scandir($outputStartURLFolderPath);
@@ -147,7 +147,7 @@ class GDZParser
 						// парсим книги
 						$startURLsProgressPercent = round($startURLsProgress / $startURLsCount * 100); // считаем прогресс в процентах для удобства
 
-						$this->cli->out("<dim>[{$startURLsProgressPercent}%]</dim> " . "Parsing books from {$startURL}... (Attempt {$attempt} of {$this->Config->Attempts})");
+						$this->cli->out("<dim>[{$startURLsProgress} / {$startURLsCount}]</dim> <dim>[{$startURLsProgressPercent}%]</dim> " . "Parsing books from {$startURL}... (Attempt {$attempt} of {$this->Config->Attempts})");
 						$books = $this->BookParserContext->parse($startURL, $this->getRandomProxy(), $this->Config->Timeout);
 
 						// обновляем счетчики
@@ -240,7 +240,7 @@ class GDZParser
 					? round($taskListProgress / $totalBooksCount * 100)
 					: 0;
 
-				$this->cli->output("<dim>[{$tasksItemsProgressPercent}%]</dim> Task list for book <yellow>{$bookItem['book']->title}</yellow> already parsed. Skipping...");
+				$this->cli->output("<dim>[{$taskListProgress} / {$totalBooksCount}]</dim> <dim>[{$tasksItemsProgressPercent}%]</dim> Task list for book <yellow>{$bookItem['book']->title}</yellow> already parsed. Skipping...");
 
 				// [OUTPUT] восстанавливаем список задач
 				$storedTasks = json_decode(file_get_contents($bookFolderPath . '\\taskList.json'), true);
@@ -270,7 +270,7 @@ class GDZParser
 							? round($taskListProgress / $totalBooksCount * 100)
 							: 0; // считаем прогресс в процентах для удобства
 
-						$this->cli->out("<dim>[{$tasksItemsProgressPercent}%]</dim> " . "Parsing task list for book <yellow>{$bookItem['book']->title}</yellow> (<bold>URL:</bold> <yellow>{$bookItem['book']->url})</yellow>... (Attempt <yellow>{$attempt}</yellow> of <yellow>{$this->Config->Attempts}</yellow>)");
+						$this->cli->out("<dim>[{$taskListProgress} / {$totalBooksCount}]</dim> <dim>[{$tasksItemsProgressPercent}%]</dim> " . "Parsing task list for book <yellow>{$bookItem['book']->title}</yellow> (<bold>URL:</bold> <yellow>{$bookItem['book']->url})</yellow>... (Attempt <yellow>{$attempt}</yellow> of <yellow>{$this->Config->Attempts}</yellow>)");
 						$tasksItems = $this->TaskListParserContext->parse($bookItem["book"]->url, $this->getRandomProxy(), $this->Config->Timeout);
 
 						// обновляем счетчики
@@ -362,7 +362,7 @@ class GDZParser
 
 			if (file_exists($outputTaskFullFileName)) {
 				// [OUTPUT] Пропускаем, т.к. файл уже существует, и его парсить не требуется
-				$this->cli->output("<dim>[{$tasksProgressPercent}%]</dim> File <yellow>{$outputTaskFullFileName}</yellow> already exists. Skipping...");
+				$this->cli->output("<dim>[{$tasksProgress} / {$totalTasksCount}]</dim> <dim>[{$tasksProgressPercent}%]</dim> File <yellow>{$outputTaskFullFileName}</yellow> already exists. Skipping...");
 
 				// обновляем счетчик прогресса
 				$tasksProgress++;
@@ -374,7 +374,7 @@ class GDZParser
 						// парсим задачу
 						$tasksProgressPercent = round($tasksProgress / $totalTasksCount * 100); // считаем прогресс в процентах для удобства
 
-						$this->cli->out("<dim>[{$tasksProgressPercent}%]</dim> " . "Parsing task from {$tasksItemsListItem["tasksList"]->url}... (Attempt {$attempt} of {$this->Config->Attempts})");
+						$this->cli->out("<dim>[{$tasksProgress} / {$totalTasksCount}]</dim> <dim>[{$tasksProgressPercent}%]</dim> " . "Parsing task from {$tasksItemsListItem["tasksList"]->url}... (Attempt {$attempt} of {$this->Config->Attempts})");
 						$taskInfo = $this->TaskParserContext->parse($tasksItemsListItem["tasksList"]->url, $this->getRandomProxy(), $this->Config->Timeout);
 
 						// обновляем счетчики
