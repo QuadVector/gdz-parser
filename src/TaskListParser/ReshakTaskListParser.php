@@ -108,10 +108,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 						continue;
 					}
 
-					if (
-						!str_starts_with($href, '/otvet/')
-						&& !preg_match('#^https?://#i', $href)
-					) {
+					if (!$this->isTaskHref($href)) {
 						unset($href, $title); // чистим память
 						continue;
 					}
@@ -136,6 +133,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 		return $result;
 	}
+
 
 	/**
 	 * Парсинг нового формата: #extremum-slide-menu-index с sublnk/submenu и partName/partContent
@@ -209,70 +207,115 @@ class ReshakTaskListParser implements TaskListParserInterface
 	 */
 	private function parseSubmenuBlock($li, ?string $currentChapter, array &$result): void
 	{
-		// Внутри submenu ищем div.sublnk1, в котором чередуются partName и partContent
+		// Внутри submenu ищем div.sublnk1, в котором чередуются partName и блоки ссылок
 		$sublnk1 = $li->findOneOrFalse('div.sublnk1');
 		if (!$sublnk1) {
-			// fallback: ищем partContent напрямую внутри li
+			// fallback: ищем блоки напрямую внутри li
 			$sublnk1 = $li;
 		}
 
 		$currentPartName = null;
 
 		foreach ($sublnk1->children() as $child) {
-			$childClass = (string)($child->getAttribute('class') ?? '');
+			$childClassAttr = (string)($child->getAttribute('class') ?? '');
+			$childClassList = preg_split('/\s+/', trim($childClassAttr)) ?: [];
 
-			if ($childClass === 'partName') {
-				// Название подраздела (Step 1:, Тест 1:, Reading Class One: и т.д.)
+			if (in_array('partName', $childClassList, true)) {
 				$partText = Text::CleanupText($child->plaintext);
-				// убираем завершающее двоеточие для чистоты
 				$currentPartName = rtrim($partText, ':');
-				unset($partText);
+
+				unset($partText, $childClassAttr, $childClassList);
 				continue;
 			}
 
-			if ($childClass === 'partContent') {
-				$links = $child->find('a');
-
-				foreach ($links as $a) {
-					$href = trim((string)$a->getAttribute('href'));
-					$title = Text::CleanupText($a->plaintext);
-
-					if ($href === '' || $title === '') {
-						unset($href, $title);
-						continue;
-					}
-
-					if (
-						!str_starts_with($href, '/otvet/')
-						&& !preg_match('#^https?://#i', $href)
-					) {
-						unset($href, $title);
-						continue;
-					}
-
-					// Формируем составной chapter: "Юнит 1 — Step 1"
-					$chapter = $currentChapter;
-					if ($currentPartName !== null && $currentPartName !== '') {
-						$chapter = $chapter !== null
-							? $currentChapter . ' — ' . $currentPartName
-							: $currentPartName;
-					}
-
-					$result[] = new TaskListItemDTO(
-						title: $title,
-						chapter: $chapter,
-						url: Text::MakeAbsoluteURL(self::DOMAIN, $href)
-					);
-
-					unset($href, $title, $chapter);
-				}
-
-				unset($links);
+			if (
+				in_array('partContent', $childClassList, true)
+				|| in_array('razdel', $childClassList, true)
+			) {
+				$this->parseLinksBlock($child, $currentChapter, $currentPartName, $result);
 			}
 
-			unset($childClass);
+			unset($childClassAttr, $childClassList);
 		}
 
 		unset($sublnk1, $currentPartName);
+	}
+
+	/**
+	 * Парсинг ссылок внутри блока задач
+	 */
+	private function parseLinksBlock($block, ?string $currentChapter, ?string $currentPartName, array &$result): void
+	{
+		$links = $block->find('a');
+
+		foreach ($links as $a) {
+			$href = trim((string)$a->getAttribute('href'));
+			$title = Text::CleanupText($a->plaintext);
+
+			if ($href === '' || $title === '') {
+				unset($href, $title);
+				continue;
+			}
+
+			if (!$this->isTaskHref($href)) {
+				unset($href, $title);
+				continue;
+			}
+
+			$chapter = $this->makeChapterTitle($currentChapter, $currentPartName);
+
+			$result[] = new TaskListItemDTO(
+				title: $title,
+				chapter: $chapter,
+				url: Text::MakeAbsoluteURL(self::DOMAIN, $href)
+			);
+
+			unset($href, $title, $chapter);
+		}
+
+		unset($links);
+	}
+
+	/**
+	 * Проверка, что ссылка ведёт на задачу/ответ
+	 */
+	private function isTaskHref(string $href): bool
+	{
+		$href = trim($href);
+
+		if ($href === '') {
+			return false;
+		}
+
+		// Старый/основной формат ответов Reshak
+		if (str_starts_with($href, '/otvet/')) {
+			return true;
+		}
+
+		// Абсолютные ссылки оставляем, как было раньше
+		if (preg_match('#^https?://#i', $href)) {
+			return true;
+		}
+
+		// Прямые ссылки на картинки задач
+		if (preg_match('~^/[^?#]+/images/.+\.(?:jpe?g|png|webp|gif)(?:[?#].*)?$~i', $href)) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Формирование названия главы с учётом подраздела
+	 */
+	private function makeChapterTitle(?string $currentChapter, ?string $currentPartName): ?string
+	{
+		if ($currentPartName !== null && $currentPartName !== '') {
+			return $currentChapter !== null && $currentChapter !== ''
+				? $currentChapter . ' — ' . $currentPartName
+				: $currentPartName;
+		}
+
+		return $currentChapter;
 	}
 }
