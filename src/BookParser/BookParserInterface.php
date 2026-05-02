@@ -1,9 +1,9 @@
 <?php
 
-namespace Mihairu\GDZParser\BookParser;
+namespace QuadVector\GDZParser\BookParser;
 
-use Mihairu\GDZParser\DTO\BookDTO;
-use Mihairu\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\DTO\BookDTO;
+use QuadVector\GDZParser\Helper\Proxy;
 
 interface BookParserInterface
 {

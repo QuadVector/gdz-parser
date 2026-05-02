@@ -1,15 +1,15 @@
 <?php
 
-namespace Mihairu\GDZParser\BookParser;
+namespace QuadVector\GDZParser\BookParser;
 
-use Mihairu\GDZParser\BookParser\BookParserInterface;
-use Mihairu\GDZParser\DTO\BookDTO;
-use Mihairu\GDZParser\Exception\AccessDeniedException;
-use Mihairu\GDZParser\Exception\PageNotFoundException;
-use Mihairu\GDZParser\Exception\ParseException;
-use Mihairu\GDZParser\Helper\CURL;
-use Mihairu\GDZParser\Helper\Proxy;
-use Mihairu\GDZParser\Helper\Text;
+use QuadVector\GDZParser\BookParser\BookParserInterface;
+use QuadVector\GDZParser\DTO\BookDTO;
+use QuadVector\GDZParser\Exception\AccessDeniedException;
+use QuadVector\GDZParser\Exception\PageNotFoundException;
+use QuadVector\GDZParser\Exception\ParseException;
+use QuadVector\GDZParser\Helper\CURL;
+use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\Helper\Text;
 use voku\helper\HtmlDomParser;
 
 class ReshakBookParser implements BookParserInterface

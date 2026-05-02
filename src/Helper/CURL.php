@@ -1,8 +1,8 @@
 <?php
 
-namespace Mihairu\GDZParser\Helper;
+namespace QuadVector\GDZParser\Helper;
 
-use Mihairu\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\Helper\Proxy;
 
 final class CURL
 {

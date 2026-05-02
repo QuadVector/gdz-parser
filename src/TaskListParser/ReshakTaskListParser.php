@@ -1,15 +1,15 @@
 <?php
 
-namespace Mihairu\GDZParser\TaskListParser;
+namespace QuadVector\GDZParser\TaskListParser;
 
-use Mihairu\GDZParser\TaskListParser\TaskListParserInterface;
-use Mihairu\GDZParser\DTO\TaskListItemDTO;
-use Mihairu\GDZParser\Exception\AccessDeniedException;
-use Mihairu\GDZParser\Exception\PageNotFoundException;
-use Mihairu\GDZParser\Exception\ParseException;
-use Mihairu\GDZParser\Helper\CURL;
-use Mihairu\GDZParser\Helper\Proxy;
-use Mihairu\GDZParser\Helper\Text;
+use QuadVector\GDZParser\TaskListParser\TaskListParserInterface;
+use QuadVector\GDZParser\DTO\TaskListItemDTO;
+use QuadVector\GDZParser\Exception\AccessDeniedException;
+use QuadVector\GDZParser\Exception\PageNotFoundException;
+use QuadVector\GDZParser\Exception\ParseException;
+use QuadVector\GDZParser\Helper\CURL;
+use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\Helper\Text;
 
 use voku\helper\HtmlDomParser;
 

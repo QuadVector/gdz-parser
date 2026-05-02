@@ -1,8 +1,8 @@
 <?php
 
-namespace Mihairu\GDZParser\DTO;
+namespace QuadVector\GDZParser\DTO;
 
-use Mihairu\GDZParser\ValueObject\Base64Image;
+use QuadVector\GDZParser\ValueObject\Base64Image;
 
 /**
  * DTO-класс с информацией о задаче

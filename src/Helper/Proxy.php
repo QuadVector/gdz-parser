@@ -1,6 +1,6 @@
 <?php
 
-namespace Mihairu\GDZParser\Helper;
+namespace QuadVector\GDZParser\Helper;
 
 use \InvalidArgumentException;
 

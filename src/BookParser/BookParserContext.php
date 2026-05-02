@@ -1,10 +1,10 @@
 <?php
 
-namespace Mihairu\GDZParser\BookParser;
+namespace QuadVector\GDZParser\BookParser;
 
-use Mihairu\GDZParser\DTO\BookDTO;
-use Mihairu\GDZParser\BookParser\BookParserInterface;
-use Mihairu\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\DTO\BookDTO;
+use QuadVector\GDZParser\BookParser\BookParserInterface;
+use QuadVector\GDZParser\Helper\Proxy;
 
 class BookParserContext
 {

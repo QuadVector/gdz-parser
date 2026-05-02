@@ -1,18 +1,18 @@
 <?php
 
-namespace Mihairu\GDZParser;
+namespace QuadVector\GDZParser;
 
-use Mihairu\GDZParser\GDZParserConfig;
-use Mihairu\GDZParser\BookParser\BookParserContext;
-use Mihairu\GDZParser\TaskListParser\TaskListParserContext;
-use Mihairu\GDZParser\TaskParser\TaskParserContext;
-use Mihairu\GDZParser\DTO\BookDTO;
-use Mihairu\GDZParser\DTO\TaskListItemDTO;
-use Mihairu\GDZParser\Helper\Proxy;
-use Mihairu\GDZParser\Helper\Text;
-use Mihairu\GDZParser\Exception\AccessDeniedException;
-use Mihairu\GDZParser\Exception\PageNotFoundException;
-use Mihairu\GDZParser\Exception\ParseException;
+use QuadVector\GDZParser\GDZParserConfig;
+use QuadVector\GDZParser\BookParser\BookParserContext;
+use QuadVector\GDZParser\TaskListParser\TaskListParserContext;
+use QuadVector\GDZParser\TaskParser\TaskParserContext;
+use QuadVector\GDZParser\DTO\BookDTO;
+use QuadVector\GDZParser\DTO\TaskListItemDTO;
+use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\Helper\Text;
+use QuadVector\GDZParser\Exception\AccessDeniedException;
+use QuadVector\GDZParser\Exception\PageNotFoundException;
+use QuadVector\GDZParser\Exception\ParseException;
 
 use League\CLImate\CLImate;
 

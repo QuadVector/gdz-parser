@@ -1,12 +1,12 @@
 <?php
 
-namespace Mihairu\GDZParser\ValueObject;
+namespace QuadVector\GDZParser\ValueObject;
 
-use Mihairu\GDZParser\Helper\CURL;
-use Mihairu\GDZParser\Helper\Proxy;
-use Mihairu\GDZParser\Exception\AccessDeniedException;
-use Mihairu\GDZParser\Exception\EncodeException;
-use Mihairu\GDZParser\Exception\DecodeException;
+use QuadVector\GDZParser\Helper\CURL;
+use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\Exception\AccessDeniedException;
+use QuadVector\GDZParser\Exception\EncodeException;
+use QuadVector\GDZParser\Exception\DecodeException;
 use \InvalidArgumentException;
 
 class Base64Image

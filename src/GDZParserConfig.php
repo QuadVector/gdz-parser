@@ -1,11 +1,11 @@
 <?php
 
-namespace Mihairu\GDZParser;
+namespace QuadVector\GDZParser;
 
-use Mihairu\GDZParser\BookParser\BookParserInterface;
-use Mihairu\GDZParser\TaskListParser\TaskListParserInterface;
-use Mihairu\GDZParser\TaskParser\TaskParserInterface;
-use Mihairu\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\BookParser\BookParserInterface;
+use QuadVector\GDZParser\TaskListParser\TaskListParserInterface;
+use QuadVector\GDZParser\TaskParser\TaskParserInterface;
+use QuadVector\GDZParser\Helper\Proxy;
 use InvalidArgumentException;
 
 final class GDZParserConfig

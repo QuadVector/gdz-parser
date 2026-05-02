@@ -1,6 +1,6 @@
 <?php
 
-namespace Mihairu\GDZParser\Exception;
+namespace QuadVector\GDZParser\Exception;
 
 use Exception;
 

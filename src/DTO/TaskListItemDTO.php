@@ -1,6 +1,6 @@
 <?php
 
-namespace Mihairu\GDZParser\DTO;
+namespace QuadVector\GDZParser\DTO;
 
 /**
  * DTO-класс с информацией о книге

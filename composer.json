@@ -1,11 +1,11 @@
 {
-    "name": "mihairu/reshak_parser",
+    "name": "quadvector/reshak_parser",
     "description": "GDZ Parser",
     "type": "project",
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Mihairu\\GDZParser\\": "src/"
+            "QuadVector\\GDZParser\\": "src/"
         }
     },
     "authors": [

@@ -1,10 +1,10 @@
 <?php
 
-namespace Mihairu\GDZParser\TaskParser;
+namespace QuadVector\GDZParser\TaskParser;
 
-use Mihairu\GDZParser\DTO\TaskDTO;
-use Mihairu\GDZParser\TaskParser\TaskParserInterface;
-use Mihairu\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\DTO\TaskDTO;
+use QuadVector\GDZParser\TaskParser\TaskParserInterface;
+use QuadVector\GDZParser\Helper\Proxy;
 
 class TaskParserContext
 {

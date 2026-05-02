@@ -1,17 +1,17 @@
 <?php
 
-namespace Mihairu\GDZParser\TaskParser;
+namespace QuadVector\GDZParser\TaskParser;
 
 use Exception;
-use Mihairu\GDZParser\TaskParser\TaskParserInterface;
-use Mihairu\GDZParser\DTO\TaskDTO;
-use Mihairu\GDZParser\Exception\AccessDeniedException;
-use Mihairu\GDZParser\Exception\PageNotFoundException;
-use Mihairu\GDZParser\Exception\ParseException;
-use Mihairu\GDZParser\Helper\CURL;
-use Mihairu\GDZParser\Helper\Proxy;
-use Mihairu\GDZParser\Helper\Text;
-use Mihairu\GDZParser\ValueObject\Base64Image;
+use QuadVector\GDZParser\TaskParser\TaskParserInterface;
+use QuadVector\GDZParser\DTO\TaskDTO;
+use QuadVector\GDZParser\Exception\AccessDeniedException;
+use QuadVector\GDZParser\Exception\PageNotFoundException;
+use QuadVector\GDZParser\Exception\ParseException;
+use QuadVector\GDZParser\Helper\CURL;
+use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\Helper\Text;
+use QuadVector\GDZParser\ValueObject\Base64Image;
 
 use voku\helper\HtmlDomParser;
 
