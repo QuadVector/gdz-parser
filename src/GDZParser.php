@@ -378,7 +378,6 @@ class GDZParser
 						$taskInfo = $this->TaskParserContext->parse($tasksItemsListItem["tasksList"]->url, $this->getRandomProxy(), $this->Config->Timeout);
 
 						// обновляем счетчики
-						$totalTasksCount++;
 						$successParsedTasksCount++;
 						$tasksProgress++;
 
@@ -418,9 +417,8 @@ class GDZParser
 		// завершаем парсинг книг
 		$this->cli->br();
 		$this->cli->out('<bold><green>Finished parsing tasks.</green></bold>');
-		$this->cli->out("<bold><cyan>Total tasks count:</cyan></bold> {$totalTasksCount}");
 		$this->cli->out("<bold><green>Success parsed start URLs count:</green></bold> {$successParsedTasksCount}");
-		$this->cli->out("<bold><red>Failed parsed start URLs count:</red></bold> {$failedParsedTasksCountc}");
+		$this->cli->out("<bold><red>Failed parsed start URLs count:</red></bold> {$failedParsedTasksCount}");
 		$this->cli->br();
 	}
 }
