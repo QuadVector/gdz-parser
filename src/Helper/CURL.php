@@ -52,7 +52,10 @@ final class CURL
 			}
 		}
 
-		return curl_exec(self::$ch);
+		$data = curl_exec(self::$ch); // получаем данные
+		$data = mb_convert_encoding($data, 'UTF-8', 'windows-1251'); // Преобразуем в UTF-8
+
+		return $data;
 	}
 
 	/**
