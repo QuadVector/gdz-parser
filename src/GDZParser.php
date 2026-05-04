@@ -62,7 +62,6 @@ class GDZParser
 		$startURLsCount = count($this->Config->StartURLs);
 		$totalBooksCount = 0;
 		$successStartURLsCount = 0;
-		$failedStartURLsCount = 0;
 		$startURLsProgress = 0;
 
 		// выводим приветствие
@@ -177,11 +176,8 @@ class GDZParser
 							// [OUTPUT] Сохраняем информацию о книгах в JSON-файл внутрь папки
 							$this->cli->output("Saving books info to <yellow>{$outputStartURLFolderPath}\\books.json...</yellow>");
 							file_put_contents($outputStartURLFolderPath . '\\books.json', json_encode(
-								// убираем лишние данные, сохраняя только список книг текущего URL
-								array_map(function ($book) {
-									return $book;
-								}, $books),
-								JSON_UNESCAPED_UNICODE
+								$books,
+								JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 							));
 						}
 
@@ -192,13 +188,10 @@ class GDZParser
 
 						break;
 					} catch (AccessDeniedException $ex) {
-						$failedStartURLsCount++;
 						$this->cli->red()->out($ex->getMessage());
 					} catch (PageNotFoundException $ex) {
-						$failedStartURLsCount++;
 						$this->cli->red()->out($ex->getMessage());
 					} catch (ParseException $ex) {
-						$failedStartURLsCount++;
 						$this->cli->red()->out($ex->getMessage());
 					}
 				}
@@ -216,7 +209,6 @@ class GDZParser
 		$this->cli->out('<bold><green>Finished parsing books.</green></bold>');
 		$this->cli->out("<bold><cyan>Total books count:</cyan></bold> {$totalBooksCount}");
 		$this->cli->out("<bold><green>Success parsed start URLs count:</green></bold> {$successStartURLsCount}");
-		$this->cli->out("<bold><red>Failed parsed start URLs count:</red></bold> {$failedStartURLsCount}");
 		$this->cli->br();
 
 		// начинаем парсинг списков задач
@@ -227,7 +219,6 @@ class GDZParser
 		$taskListProgress = 0;
 		$totalTasksCount = 0;
 		$successTasksListCount = 0;
-		$failedTasksListCount = 0;
 
 		foreach ($booksList as $bookItem) {
 			// [OUTPUT] Название папки с задачами по конкретной книге
@@ -302,11 +293,8 @@ class GDZParser
 							// [OUTPUT] Сохраняем информацию о списке задач в JSON-файл внутрь папки книги
 							$this->cli->output("Saving task items lists to <yellow>{$bookFolderPath}\\taskList.json...</yellow>");
 							file_put_contents($bookFolderPath . '\\taskList.json', json_encode(
-								// сохраняем только список задач текущей книги
-								array_map(function ($taskItem) {
-									return $taskItem;
-								}, $tasksItems),
-								JSON_UNESCAPED_UNICODE
+								$tasksItems,
+								JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 							));
 						}
 
@@ -317,13 +305,10 @@ class GDZParser
 
 						break;
 					} catch (AccessDeniedException $ex) {
-						$failedTasksListCount++;
 						$this->cli->red()->out($ex->getMessage());
 					} catch (PageNotFoundException $ex) {
-						$failedTasksListCount++;
 						$this->cli->red()->out($ex->getMessage());
 					} catch (ParseException $ex) {
-						$failedTasksListCount++;
 						$this->cli->red()->out($ex->getMessage());
 					}
 				}
@@ -341,14 +326,12 @@ class GDZParser
 		$this->cli->out('<bold><green>Finished parsing task lists.</green></bold>');
 		$this->cli->out("<bold><cyan>Total tasks count:</cyan></bold> {$totalTasksCount}");
 		$this->cli->out("<bold><green>Success parsed task lists count:</green></bold> {$successTasksListCount}");
-		$this->cli->out("<bold><red>Failed parsed task lists count:</red></bold> {$failedTasksListCount}");
 		$this->cli->br();
 
 		// начинаем парсить каждую задачу
 		$this->cli->output("<bold><green>Start parsing tasks...</green></bold>");
 		// счетчики
 		$successParsedTasksCount = 0;
-		$failedParsedTasksCount = 0;
 		$tasksProgress = 0;
 
 
@@ -388,20 +371,17 @@ class GDZParser
 
 						file_put_contents($outputTaskFullFileName, json_encode(
 							$taskInfo,
-							JSON_UNESCAPED_UNICODE
+							JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 						));
 
 						unset($taskInfo); // очищаем память после foreach
 
 						break;
 					} catch (AccessDeniedException $ex) {
-						$failedParsedTasksCount++;
 						$this->cli->red()->out($ex->getMessage());
 					} catch (PageNotFoundException $ex) {
-						$failedParsedTasksCount++;
 						$this->cli->red()->out($ex->getMessage());
 					} catch (ParseException $ex) {
-						$failedParsedTasksCount++;
 						$this->cli->red()->out($ex->getMessage());
 					}
 				}
@@ -418,7 +398,6 @@ class GDZParser
 		$this->cli->br();
 		$this->cli->out('<bold><green>Finished parsing tasks.</green></bold>');
 		$this->cli->out("<bold><green>Success parsed start URLs count:</green></bold> {$successParsedTasksCount}");
-		$this->cli->out("<bold><red>Failed parsed start URLs count:</red></bold> {$failedParsedTasksCount}");
 		$this->cli->br();
 	}
 }
