@@ -47,16 +47,36 @@ final class CURL
 
 		if ($proxy && $proxy->host && $proxy->port) {
 			curl_setopt(self::$ch, CURLOPT_PROXY, "{$proxy->host}:{$proxy->port}");
+
 			if ($proxy->login && $proxy->password) {
 				curl_setopt(self::$ch, CURLOPT_PROXYUSERPWD, "{$proxy->login}:{$proxy->password}");
 			}
+		} else {
+			// Важно при переиспользовании self::$ch:
+			// если раньше был proxy, а теперь его нет — сбрасываем настройки proxy.
+			curl_setopt(self::$ch, CURLOPT_PROXY, '');
+			curl_setopt(self::$ch, CURLOPT_PROXYUSERPWD, '');
 		}
 
 		$data = curl_exec(self::$ch); // получаем данные
+
+		// Ошибка выполнения cURL
+		if ($data === false) {
+			return false;
+		}
+
+		$httpCode = (int)curl_getinfo(self::$ch, CURLINFO_HTTP_CODE);
+
+		// HTTP-ошибки: 400, 403, 404, 500 и т.д.
+		if ($httpCode >= 400 || $httpCode === 0) {
+			return false;
+		}
+
 		$data = mb_convert_encoding($data, 'UTF-8', 'windows-1251'); // Преобразуем в UTF-8
 
 		return $data;
 	}
+
 
 	/**
 	 * Получить изображение по URL
@@ -70,16 +90,24 @@ final class CURL
 	{
 		$ch = curl_init($url);
 
+		if ($ch === false) {
+			return false;
+		}
+
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 		curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+		curl_setopt($ch, CURLOPT_TIMEOUT, $timeout ?? 30);
+		curl_setopt($ch, CURLOPT_ENCODING, '');
 
-		if ($timeout !== null) {
-			curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-		}
+		curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+			. 'AppleWebKit/537.36 (KHTML, like Gecko) '
+			. 'Chrome/124.0.0.0 Safari/537.36');
 
 		curl_setopt($ch, CURLOPT_HTTPHEADER, [
-			'Accept: image/*,*/*;q=0.8',
+			'Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+			'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+			'Connection: keep-alive',
 		]);
 
 		if ($proxy !== null) {
@@ -94,17 +122,21 @@ final class CURL
 
 		$data = curl_exec($ch);
 
+		// Ошибка выполнения cURL
 		if ($data === false) {
-			unset($ch);
+			curl_close($ch);
 			return false;
 		}
 
-		$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-		unset($ch);
+		$httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
-		if ($httpCode !== 200) {
+		// HTTP-ошибки: 400, 403, 404, 500 и т.д.
+		if ($httpCode >= 400 || $httpCode === 0) {
+			curl_close($ch);
 			return false;
 		}
+
+		curl_close($ch);
 
 		return $data;
 	}

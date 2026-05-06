@@ -19,6 +19,7 @@ final class GDZParserConfig
 	 * @param int $Attempts Количество попыток парсинга
 	 * @param int $Timeout Таймаут на выполнение одного CURL-запроса
 	 * @param ?string $ParseOutputFolder Папка, в которую сохранять результаты парсинга
+	 * @param bool $ShowLogs Выводить в консоли дополнительную информацию
 	 * @throws InvalidArgumentException
 	 */
 	public function __construct(
@@ -29,11 +30,12 @@ final class GDZParserConfig
 		public readonly array $StartURLs = [],
 		public readonly int $Attempts = 5,
 		public readonly int $Timeout = 5,
-		public readonly ?string $ParseOutputFolder = null
+		public readonly ?string $ParseOutputFolder = null,
+		public readonly bool $ShowLogs = false
 	) {
 		foreach ($this->Proxies as $proxy) {
 			if (!$proxy instanceof Proxy) {
-				throw new InvalidArgumentException('Все элементы Proxies должны быть экземплярами Proxy');
+				throw new InvalidArgumentException('All proxies must be instances of Proxy class.');
 			}
 		}
 	}

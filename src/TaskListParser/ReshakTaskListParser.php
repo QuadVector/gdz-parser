@@ -78,10 +78,28 @@ class ReshakTaskListParser implements TaskListParserInterface
 	 * @param object $article Объект Simple PHP DOM
 	 * @return TaskListItemDTO[]
 	 */
+	/**
+	 * Парсинг старого формата: subtitle + razdel
+	 * @param object $article Объект Simple PHP DOM
+	 * @return TaskListItemDTO[]
+	 */
 	private function parseOldFormat(object $article): array
 	{
 		$result = [];
+
 		$currentChapter = null;
+
+		// Родительская глава для ситуации:
+		// <div class="subtitle">Задачи для подготовки к ЕГЭ.</div>
+		// <div class="subtitle">Задание 3.</div>
+		$parentChapter = null;
+
+		// Последний "чистый" subtitle без родителя.
+		// Нужен, чтобы при двух subtitle подряд сделать первый родителем.
+		$lastSubtitleTitle = null;
+
+		// Флаг: предыдущий значимый элемент был subtitle
+		$lastElementWasSubtitle = false;
 
 		foreach ($article->children() as $child) {
 			$classAttr = (string)($child->getAttribute('class') ?? '');
@@ -89,15 +107,39 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 			// текущая глава
 			if (in_array('subtitle', $classList, true)) {
-				$currentChapter = Text::CleanupText($child->plaintext);
+				$subtitleTitle = Text::CleanupText($child->plaintext);
 
-				unset($classAttr, $classList); // чистим память
+				if ($subtitleTitle === '') {
+					unset($subtitleTitle, $classAttr, $classList);
+					continue;
+				}
+
+				// Если subtitle идёт сразу после subtitle —
+				// предыдущий subtitle становится родителем.
+				if ($lastElementWasSubtitle && $lastSubtitleTitle !== null && $lastSubtitleTitle !== '') {
+					$parentChapter = $lastSubtitleTitle;
+					$currentChapter = $this->makeNestedChapterTitle($parentChapter, $subtitleTitle);
+				}
+				// Если родитель уже найден ранее — добавляем его к последующим subtitle
+				elseif ($parentChapter !== null && $parentChapter !== '') {
+					$currentChapter = $this->makeNestedChapterTitle($parentChapter, $subtitleTitle);
+				}
+				// Обычное поведение, как было раньше
+				else {
+					$currentChapter = $subtitleTitle;
+				}
+
+				$lastSubtitleTitle = $subtitleTitle;
+				$lastElementWasSubtitle = true;
+
+				unset($subtitleTitle, $classAttr, $classList); // чистим память
 				continue;
 			}
 
 			// блок задач
 			if (in_array('razdel', $classList, true)) {
 				$links = $child->find('a');
+				$hasParsedTasks = false;
 
 				foreach ($links as $a) {
 					$href = trim((string)$a->getAttribute('href'));
@@ -120,20 +162,34 @@ class ReshakTaskListParser implements TaskListParserInterface
 						url: Text::MakeAbsoluteURL(self::DOMAIN, $href)
 					);
 
+					$hasParsedTasks = true;
+
 					// чистим память
 					unset($href, $title);
 				}
 
-				unset($links); // чистим память
+				// Сбрасываем "subtitle подряд" только если в razdel реально были задачи.
+				// Это важно, чтобы служебные/пустые razdel не ломали определение родителя.
+				if ($hasParsedTasks) {
+					$lastElementWasSubtitle = false;
+				}
+
+				unset($links, $hasParsedTasks); // чистим память
 			}
 
 			unset($classAttr, $classList); // чистим память
 		}
 
-		unset($currentChapter); // чистим память
+		unset(
+			$currentChapter,
+			$parentChapter,
+			$lastSubtitleTitle,
+			$lastElementWasSubtitle
+		); // чистим память
 
 		return $result;
 	}
+
 
 
 	/**
@@ -337,5 +393,36 @@ class ReshakTaskListParser implements TaskListParserInterface
 		}
 
 		return $currentChapter;
+	}
+
+	/**
+	 * Формирование вложенного названия главы
+	 *
+	 * Пример:
+	 * parent: Задачи для подготовки к ЕГЭ.
+	 * child: Задание 3.
+	 *
+	 * Результат:
+	 * Задачи для подготовки к ЕГЭ. Задание 3.
+	 *
+	 * @param string|null $parentChapter Родительская глава
+	 * @param string|null $childChapter Дочерняя глава
+	 *
+	 * @return string|null
+	 */
+	private function makeNestedChapterTitle(?string $parentChapter, ?string $childChapter): ?string
+	{
+		$parentChapter = $parentChapter !== null ? trim($parentChapter) : '';
+		$childChapter = $childChapter !== null ? trim($childChapter) : '';
+
+		if ($parentChapter !== '' && $childChapter !== '') {
+			return $parentChapter . ' ' . $childChapter;
+		}
+
+		if ($childChapter !== '') {
+			return $childChapter;
+		}
+
+		return $parentChapter !== '' ? $parentChapter : null;
 	}
 }

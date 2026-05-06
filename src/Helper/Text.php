@@ -71,11 +71,11 @@ final class Text
 	}
 
 	/**
-	 * Сгенерировать название папки на основе ссылки
+	 * Сгенерировать название на основе ссылки
 	 * @param string $url
 	 * @return string
 	 */
-	public static function GenerateFolderNameFromURL(string $url): string
+	public static function GenerateNameFromURL(string $url): string
 	{
 		$url = trim($url);
 
@@ -87,12 +87,15 @@ final class Text
 
 		$host = $parts['host'] ?? '';
 		$path = $parts['path'] ?? '';
+		$query = $parts['query'] ?? '';
 
 		// Если URL без схемы, parse_url может положить всё в path
 		if ($host === '' && $path !== '') {
 			$prepared = parse_url('http://' . ltrim($url, '/'));
+
 			$host = $prepared['host'] ?? '';
 			$path = $prepared['path'] ?? '';
+			$query = $prepared['query'] ?? '';
 		}
 
 		$path = trim($path, '/');
@@ -112,6 +115,20 @@ final class Text
 
 		$result = trim($host . ($path !== '' ? '/' . $path : ''), '/');
 
+		// Добавляем GET-параметры
+		if ($query !== '') {
+			$query = urldecode($query);
+
+			// Для читаемости заменяем разделители query-строки
+			$query = str_replace(
+				['&', '='],
+				['_', '-'],
+				$query
+			);
+
+			$result .= '_' . $query;
+		}
+
 		// Заменяем все неподходящие символы на "_"
 		$result = preg_replace('/[^a-zA-Z0-9._-]+/', '_', $result);
 
@@ -123,6 +140,7 @@ final class Text
 
 		return $result !== '' ? $result : 'default';
 	}
+
 
 	/**
 	 * Сделать относительную ссылку абсолютной
