@@ -140,4 +140,20 @@ final class CURL
 
 		return $data;
 	}
+
+	/**
+	 * Проверить по ссылке, является ли она изображением
+	 * Проверяет по расширению. Для более точного определения лучше использовать http-заголовки
+	 * Но в данном случае это наиболее быстрый способ
+	 * 
+	 * @param string $url Исходная ссылка
+	 * @return bool
+	 */
+	public static function IsURLImage(string $url): bool
+	{
+		$extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+		$path = parse_url($url, PHP_URL_PATH);
+		$ext = pathinfo($path, PATHINFO_EXTENSION);
+		return in_array(strtolower($ext), $extensions);
+	}
 }

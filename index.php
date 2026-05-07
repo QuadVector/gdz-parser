@@ -40,7 +40,8 @@ $GDZParser = new GDZParser(
         Proxies: array_map(function (string $item) {
             return Proxy::fromString($item);
         }, [
-            "45.56.137.220:9285:mkubsocc:zt8bk98vbqn9",
+            "96.62.194.189:6391:mkubsocc:zt8bk98vbqn9",
+            "31.98.15.181:5358:mkubsocc:zt8bk98vbqn9"
         ]),
         Attempts: 5,
         Timeout: 5,

@@ -50,69 +50,79 @@ class ReshakTaskParser implements TaskParserInterface
 		// обработка относительных ссылок
 		$url = Text::MakeAbsoluteURL(self::DOMAIN, $url);
 
-		// получаем HTML-код страницы
-		$html = CURL::FileGetContents($url, $proxy, $timeout);
+		// если ссылка оказывается картинкой, то тогда просто извлекаем картинку
+		if (CURL::IsURLImage($url)) {
+			$resultTitle = "";
+			$resultContent = "";
+			$resultImages = [
+				Base64Image::FromURL($url, $proxy, $timeout)
+			];
+		} else {
 
-		if (!$html) {
-			throw new PageNotFoundException("Can't open {$url}.");
-		}
+			// получаем HTML-код страницы
+			$html = CURL::FileGetContents($url, $proxy, $timeout);
 
-		if ($html === 'Access Denied') {
-			throw new AccessDeniedException("Access denied for {$url}");
-		}
+			if (!$html) {
+				throw new PageNotFoundException("Can't open {$url}.");
+			}
 
-		// обрабатываем HTML код
-		$dom = HtmlDomParser::str_get_html($html);
-		unset($html); // чистим память
+			if ($html === 'Access Denied') {
+				throw new AccessDeniedException("Access denied for {$url}");
+			}
 
-		if (!$dom) {
-			throw new ParseException("Can't parse {$url}.");
-		}
+			// обрабатываем HTML код
+			$dom = HtmlDomParser::str_get_html($html);
+			unset($html); // чистим память
 
-		// получаем контейнер с содержимым задачи
-		$article = $dom->findOneOrFalse('article.lcol');
-		if (!$article) {
-			unset($dom); // чистим память
+			if (!$dom) {
+				throw new ParseException("Can't parse {$url}.");
+			}
 
-			throw new ParseException("Can't find article.lcol on {$url}.");
-		}
+			// получаем контейнер с содержимым задачи
+			$article = $dom->findOneOrFalse('article.lcol');
+			if (!$article) {
+				unset($dom); // чистим память
 
-		// получаем заголовок задачи
-		$resultTitle = "";
+				throw new ParseException("Can't find article.lcol on {$url}.");
+			}
 
-		$resultTitleNode = $article->findOneOrFalse(".titleh1");
-		if ($resultTitleNode) {
-			$resultTitle = Text::CleanupText(strip_tags($resultTitleNode->innerText()));
-			unset($resultTitleNode); // чистим память
-		}
+			// получаем заголовок задачи
+			$resultTitle = "";
 
-		// получаем текст решения задачи
-		$resultContent = "";
-		$resultContentNode = $article->findOneOrFalse(".text_zad");
+			$resultTitleNode = $article->findOneOrFalse(".titleh1");
+			if ($resultTitleNode) {
+				$resultTitle = Text::CleanupText(strip_tags($resultTitleNode->innerText()));
+				unset($resultTitleNode); // чистим память
+			}
 
-		if ($resultContentNode) {
-			$resultContent = Text::CleanupText(strip_tags($resultContentNode->innerText()));
-			unset($resultContentNode); // чистим память
-		}
+			// получаем текст решения задачи
+			$resultContent = "";
+			$resultContentNode = $article->findOneOrFalse(".text_zad");
 
-		// получаем изображения, которые могут содержать решение задачи
-		$resultImages = [];
-		$resultImagesNodes = $article->findMultiOrFalse("div[class*='pic_otvet'] img");
-		if ($resultImagesNodes) {
-			foreach ($resultImagesNodes as $image) {
-				// получаем ссылку на изображение
-				$imageURL = $image->getAttribute("src");
-				if (empty($imageURL)) {
-					$imageURL = $image->getAttribute("data-src");
-				}
-				$imageURL = $this->MakeAbsoluteURL($imageURL);
+			if ($resultContentNode) {
+				$resultContent = Text::CleanupText(strip_tags($resultContentNode->innerText()));
+				unset($resultContentNode); // чистим память
+			}
 
-				// загружаем к себе изображение в base64 формате
-				try {
-					$imageObject = Base64Image::FromURL($imageURL, $proxy, $timeout);
-					$resultImages[] = $imageObject->GetBase64();
-				} catch (Exception $e) {
-					error_log($e->getMessage());
+			// получаем изображения, которые могут содержать решение задачи
+			$resultImages = [];
+			$resultImagesNodes = $article->findMultiOrFalse("div[class*='pic_otvet'] img");
+			if ($resultImagesNodes) {
+				foreach ($resultImagesNodes as $image) {
+					// получаем ссылку на изображение
+					$imageURL = $image->getAttribute("src");
+					if (empty($imageURL)) {
+						$imageURL = $image->getAttribute("data-src");
+					}
+					$imageURL = $this->MakeAbsoluteURL($imageURL);
+
+					// загружаем к себе изображение в base64 формате
+					try {
+						$imageObject = Base64Image::FromURL($imageURL, $proxy, $timeout);
+						$resultImages[] = $imageObject->GetBase64();
+					} catch (Exception $e) {
+						error_log($e->getMessage());
+					}
 				}
 			}
 		}

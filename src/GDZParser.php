@@ -396,13 +396,17 @@ class GDZParser
 				: 0; // считаем прогресс в процентах для удобства
 
 			// [OUTPUT] Название файла с задачей
-			if (is_string($tasksItemsListItem["tasksList"]->chapter)) { // глава может отсутствовать
-				$outputTaskFileName = Text::TranslitRef($tasksItemsListItem["tasksList"]->chapter) . "_" . Text::GenerateNameFromURL($tasksItemsListItem["tasksList"]->url) . "_" . Text::TranslitRef($tasksItemsListItem["tasksList"]->title); // название файла, который будет сохранен
-			} else {
-				$outputTaskFileName = Text::GenerateNameFromURL($tasksItemsListItem["tasksList"]->url) . "_" . Text::TranslitRef($tasksItemsListItem["tasksList"]->title); // название файла без главы
-			}
+			$outputTaskFileName = "";
+			if(is_string($tasksItemsListItem["tasksList"]->chapter)) $outputTaskFileName .= Text::TranslitRef($tasksItemsListItem["tasksList"]->chapter);
 
-			$outputStartURLFolderPath = $tasksItemsListItem["outputPath"]; // директория, где будет находиться задача, совпадает с директорией списка задач, т.к. это конечный элемент
+			if(is_string($tasksItemsListItem["tasksList"]->url)) $outputTaskFileName .= "_" . Text::GenerateNameFromURL($tasksItemsListItem["tasksList"]->url);
+
+			if(is_string($tasksItemsListItem["tasksList"]->title)) $outputTaskFileName .= "_" . Text::TranslitRef($tasksItemsListItem["tasksList"]->title);
+
+			$outputTaskFileName = trim($outputTaskFileName, "_");
+
+			// директория, где будет находиться задача, совпадает с директорией списка задач, т.к. это конечный элемент
+			$outputStartURLFolderPath = $tasksItemsListItem["outputPath"]; 
 			$outputTaskFullFileName = $outputStartURLFolderPath . self::DIRECTORY_SEPARATOR . $outputTaskFileName . '.json';
 
 			$taskParsedSuccessfully = false;
