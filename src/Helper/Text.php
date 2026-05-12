@@ -169,4 +169,26 @@ final class Text
 
 		return 'https://' . rtrim($domain, '/') . '/' . ltrim($href, '/');
 	}
+
+	/**
+	 * Преобразовать имя json-файла таким образом, чтобы
+	 * оно всегда соответствовало максимальной длине (255 символов)
+	 * @param string $name Исходное имя файла (с расширением)
+	 * @return string
+	 */
+	public static function makeSafeJSONFileName(string $name): string
+	{
+		$extensionLength = mb_strlen(".json"); // 5 символов для расширения и точки (.json)
+		$maxLength = 255;
+		$strLen = mb_strlen($name);
+
+		// если слишком длинный текст, генерируем новое уникальное имя, т.к. оно необходимо
+		// для уникальности имени при парсинге
+		if ($strLen > $maxLength) {
+			$md5Name = md5($name);
+			$name = mb_substr($name, 0, $maxLength - $extensionLength - mb_strlen($md5Name) - 1) . "_" . $md5Name . ".json"; // -1 для доп. символа подчеркивания
+		}
+		
+		return $name;
+	}
 }

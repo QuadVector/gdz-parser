@@ -189,10 +189,15 @@ class GDZParser
 
 							// [OUTPUT] Сохраняем информацию о книгах в JSON-файл внутрь папки
 							if ($this->Config->ShowLogs) $this->cli->output("Saving books info to <yellow>{$outputStartURLFolderPath}\\books.json...</yellow>");
-							file_put_contents($outputStartURLFolderPath . '\\books.json', json_encode(
+							
+							$saveStatus = file_put_contents($outputStartURLFolderPath . '\\books.json', json_encode(
 								$books,
 								JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 							));
+
+							if(!$saveStatus) {
+								if ($this->Config->ShowLogs) $this->cli->output("<red>Failed to save books info to <yellow>{$outputStartURLFolderPath}\\books.json...</yellow></red>");
+							}
 						}
 
 						$startURLParsedSuccessfully = true;
@@ -324,10 +329,15 @@ class GDZParser
 
 							// [OUTPUT] Сохраняем информацию о списке задач в JSON-файл внутрь папки книги
 							if ($this->Config->ShowLogs) $this->cli->output("Saving task items lists to <yellow>{$bookFolderPath}\\taskList.json...</yellow>");
-							file_put_contents($bookFolderPath . '\\taskList.json', json_encode(
+
+							$saveStatus = file_put_contents($bookFolderPath . '\\taskList.json', json_encode(
 								$tasksItems,
 								JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 							));
+
+							if(!$saveStatus) {
+								if ($this->Config->ShowLogs) $this->cli->output("<red>Failed to save task items lists to <yellow>{$bookFolderPath}\\taskList.json!</red>");
+							}
 						}
 
 						$taskListParsedSuccessfully = true;
@@ -404,10 +414,14 @@ class GDZParser
 			if(is_string($tasksItemsListItem["tasksList"]->title)) $outputTaskFileName .= "_" . Text::TranslitRef($tasksItemsListItem["tasksList"]->title);
 
 			$outputTaskFileName = trim($outputTaskFileName, "_");
+			$outputTaskFileName .= ".json";
+
+			//гарантируем безопасную длину названия файла
+			$outputTaskFileName = Text::makeSafeJSONFileName($outputTaskFileName);
 
 			// директория, где будет находиться задача, совпадает с директорией списка задач, т.к. это конечный элемент
 			$outputStartURLFolderPath = $tasksItemsListItem["outputPath"]; 
-			$outputTaskFullFileName = $outputStartURLFolderPath . self::DIRECTORY_SEPARATOR . $outputTaskFileName . '.json';
+			$outputTaskFullFileName = $outputStartURLFolderPath . self::DIRECTORY_SEPARATOR . $outputTaskFileName;
 
 			$taskParsedSuccessfully = false;
 
@@ -431,10 +445,14 @@ class GDZParser
 						// [OUTPUT] Сохраняем информацию о задаче в JSON-файл
 						if ($this->Config->ShowLogs) $this->cli->output("Saving data to <yellow>{$outputTaskFullFileName}</yellow>...");
 
-						file_put_contents($outputTaskFullFileName, json_encode(
+						$saveStatus = file_put_contents($outputTaskFullFileName, json_encode(
 							$taskInfo,
 							JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 						));
+
+						if(!$saveStatus) {
+							if ($this->Config->ShowLogs) $this->cli->red()->out("Failed to save data to <yellow>{$outputTaskFullFileName}</yellow>");
+						}
 
 						unset($taskInfo); // очищаем память после foreach
 
