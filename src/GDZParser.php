@@ -60,8 +60,20 @@ class GDZParser
 	 */
 	public function run(): void
 	{
-		// счетчики
+		// стартовое сообщение
 		$startURLsCount = count($this->config->startURLs);
+
+		$this->cli->clear();
+		$this->cli->output("<green><bold>Start parsing...</bold></green>");
+		$this->cli->output("<bold>URLs count:</bold>\t {$startURLsCount}");
+		$this->cli->output("<bold>Attempts:</bold>\t {$this->config->attempts}");
+		$this->cli->output("<bold>Timeout:</bold>\t {$this->config->timeout}");
+		$this->cli->output("<bold>Show logs:</bold>\t {$this->config->showLogs}");
+		$this->cli->output("<bold>Output folder:</bold>\t {$this->config->parseOutputFolder}")->br();
+		$this->cli->output("<bold>Proxies:</bold>");
+		$this->cli->table($this->config->proxies)->br();
+
+		// счетчики
 		$totalBooksCount = 0;
 		$successstartURLsCount = 0;
 		$startURLsProgress = 0;
