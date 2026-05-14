@@ -15,7 +15,7 @@ final class CURL
 	 * @param ?int $timeout таймаут
 	 * @return bool|string HTML-код страницы
 	 */
-	public static function FileGetContents(string $url, ?Proxy $proxy = null, ?int $timeout = null): string|false
+	public static function fileGetContents(string $url, ?Proxy $proxy = null, ?int $timeout = null): string|false
 	{
 		if (self::$ch === null) {
 			self::$ch = curl_init();
@@ -86,7 +86,7 @@ final class CURL
 	 * @param ?int $timeout
 	 * @return string|false Бинарные данные изображения или false при ошибке
 	 */
-	public static function FileGetImage(string $url, ?Proxy $proxy = null, ?int $timeout = null): string|false
+	public static function fileGetImage(string $url, ?Proxy $proxy = null, ?int $timeout = null): string|false
 	{
 		$ch = curl_init($url);
 
@@ -149,7 +149,7 @@ final class CURL
 	 * @param string $url Исходная ссылка
 	 * @return bool
 	 */
-	public static function IsURLImage(string $url): bool
+	public static function isURLImage(string $url): bool
 	{
 		$extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
 		$path = parse_url($url, PHP_URL_PATH);

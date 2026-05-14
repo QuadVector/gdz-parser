@@ -28,7 +28,7 @@ final class TaskDTO
 	 * @param array $data
 	 * @return TaskDTO
 	 */
-	public static function FromArray(array $data): self
+	public static function fromArray(array $data): self
 	{
 		return new self(
 			$data['title'],

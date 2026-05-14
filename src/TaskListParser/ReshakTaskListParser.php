@@ -25,10 +25,10 @@ class ReshakTaskListParser implements TaskListParserInterface
 	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): array
 	{
 		// обработка относительных ссылок
-		$url = Text::MakeAbsoluteURL(self::DOMAIN, $url);
+		$url = Text::makeAbsoluteURL(self::DOMAIN, $url);
 
 		// получаем HTML-код страницы
-		$html = CURL::FileGetContents($url, $proxy, $timeout);
+		$html = CURL::fileGetContents($url, $proxy, $timeout);
 
 		if (!$html) {
 			throw new PageNotFoundException("Can't open {$url}.");
@@ -107,7 +107,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 			// текущая глава
 			if (in_array('subtitle', $classList, true)) {
-				$subtitleTitle = Text::CleanupText($child->plaintext);
+				$subtitleTitle = Text::cleanupText($child->plaintext);
 
 				if ($subtitleTitle === '') {
 					unset($subtitleTitle, $classAttr, $classList);
@@ -143,7 +143,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 				foreach ($links as $a) {
 					$href = trim((string)$a->getAttribute('href'));
-					$title = Text::CleanupText($a->plaintext);
+					$title = Text::cleanupText($a->plaintext);
 
 					// проверка на заполненность данных
 					if ($href === '' || $title === '') {
@@ -159,7 +159,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 					$result[] = new TaskListItemDTO(
 						title: $title,
 						chapter: $currentChapter,
-						url: Text::MakeAbsoluteURL(self::DOMAIN, $href)
+						url: Text::makeAbsoluteURL(self::DOMAIN, $href)
 					);
 
 					$hasParsedTasks = true;
@@ -249,7 +249,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 			// Элемент без класса "submenu" — ищем span.sublnk (название главы)
 			$sublnk = $li->findOneOrFalse('span.sublnk');
 			if ($sublnk) {
-				$currentChapter = Text::CleanupText($sublnk->plaintext);
+				$currentChapter = Text::cleanupText($sublnk->plaintext);
 				unset($sublnk);
 			}
 
@@ -284,7 +284,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 			$childClassList = preg_split('/\s+/', trim($childClassAttr)) ?: [];
 
 			if (in_array('partName', $childClassList, true)) {
-				$partText = Text::CleanupText($child->plaintext);
+				$partText = Text::cleanupText($child->plaintext);
 				$currentPartName = rtrim($partText, ':');
 
 				unset($partText, $childClassAttr, $childClassList);
@@ -318,7 +318,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 		foreach ($links as $a) {
 			$href = trim((string)$a->getAttribute('href'));
-			$title = Text::CleanupText($a->plaintext);
+			$title = Text::cleanupText($a->plaintext);
 
 			if ($href === '' || $title === '') {
 				unset($href, $title);
@@ -335,7 +335,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 			$result[] = new TaskListItemDTO(
 				title: $title,
 				chapter: $chapter,
-				url: Text::MakeAbsoluteURL(self::DOMAIN, $href)
+				url: Text::makeAbsoluteURL(self::DOMAIN, $href)
 			);
 
 			unset($href, $title, $chapter);

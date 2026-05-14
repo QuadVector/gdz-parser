@@ -26,7 +26,7 @@ final class Proxy
 	 * @throws InvalidArgumentException
 	 * @return Proxy
 	 */
-	public static function FromString(string $proxy): self
+	public static function fromString(string $proxy): self
 	{
 		$parts = explode(':', trim($proxy));
 

@@ -9,7 +9,7 @@ final class Text
 	 * @param string $text исходный текст
 	 * @return string
 	 */
-	public static function CleanupText(string $text): string
+	public static function cleanupText(string $text): string
 	{
 		$text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 		$text = preg_replace('/\x{00A0}/u', ' ', $text);
@@ -23,7 +23,7 @@ final class Text
 	 * @param string $value Исходный текст
 	 * @return string
 	 */
-	public static function TranslitRef(string $value): string
+	public static function translitRef(string $value): string
 	{
 		$converter = array(
 			'а' => 'a',
@@ -75,7 +75,7 @@ final class Text
 	 * @param string $url
 	 * @return string
 	 */
-	public static function GenerateNameFromURL(string $url): string
+	public static function generateNamefromURL(string $url): string
 	{
 		$url = trim($url);
 
@@ -148,7 +148,7 @@ final class Text
 	 * @param string $href Относительная ссылка
 	 * @return string
 	 */
-	public static function MakeAbsoluteURL(string $domain, string $href): string
+	public static function makeAbsoluteURL(string $domain, string $href): string
 	{
 		$domain = trim($domain);
 		$href = trim($href);

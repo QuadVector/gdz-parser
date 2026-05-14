@@ -25,10 +25,10 @@ class ReshakBookParser implements BookParserInterface
 	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): array
 	{
 		// обработка относительных ссылок
-		$url = Text::MakeAbsoluteURL(self::DOMAIN, $url);
+		$url = Text::makeAbsoluteURL(self::DOMAIN, $url);
 
 		// получаем HTML-код страницы
-		$html = CURL::FileGetContents($url, $proxy, $timeout);
+		$html = CURL::fileGetContents($url, $proxy, $timeout);
 
 		if (!$html) {
 			throw new PageNotFoundException("Can't open {$url}.");
@@ -76,18 +76,18 @@ class ReshakBookParser implements BookParserInterface
 				continue;
 			}
 
-			$title = Text::CleanupText($titleNode->plaintext);
+			$title = Text::cleanupText($titleNode->plaintext);
 
 			if ($dopTitleNode) {
-				$title .= ' ' . Text::CleanupText($dopTitleNode->plaintext);
+				$title .= ' ' . Text::cleanupText($dopTitleNode->plaintext);
 			}
 
 			$result[] = new BookDTO(
 				title: $title,
-				author: Text::CleanupText($authorNode->plaintext),
-				grade: Text::CleanupText($gradeNode->plaintext),
-				subject: Text::CleanupText($subjectNode->plaintext),
-				url: Text::MakeAbsoluteURL(self::DOMAIN, Text::CleanupText($linkNode->href))
+				author: Text::cleanupText($authorNode->plaintext),
+				grade: Text::cleanupText($gradeNode->plaintext),
+				subject: Text::cleanupText($subjectNode->plaintext),
+				url: Text::makeAbsoluteURL(self::DOMAIN, Text::cleanupText($linkNode->href))
 			);
 
 			// чистим память

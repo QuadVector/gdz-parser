@@ -120,7 +120,7 @@ class GDZParser
 				: 0; // считаем прогресс в процентах для удобства
 
 			// [OUTPUT] Название папки с текущей ссылкой
-			$outputStartURLFolderName = Text::GenerateNameFromURL($startURL);
+			$outputStartURLFolderName = Text::generateNamefromURL($startURL);
 			$outputStartURLFolderPath = $this->config->parseOutputFolder . self::DIRECTORY_SEPARATOR . $outputStartURLFolderName;
 
 			$startURLParsedSuccessfully = false;
@@ -153,7 +153,7 @@ class GDZParser
 					foreach ($parsedBooks as $book) {
 						$booksList[] = [
 							"outputPath" => $outputStartURLFolderPath,
-							"book" => BookDTO::FromArray($book)
+							"book" => BookDTO::fromArray($book)
 						];
 					}
 
@@ -281,7 +281,7 @@ class GDZParser
 				: 0; // считаем прогресс в процентах для удобства
 
 			// [OUTPUT] Название папки с задачами по конкретной книге
-			$bookFolderName = Text::TranslitRef($bookItem["book"]->title) . "_" . Text::TranslitRef($bookItem["book"]->author) . "_" . Text::GenerateNameFromURL($bookItem["book"]->url);
+			$bookFolderName = Text::translitRef($bookItem["book"]->title) . "_" . Text::translitRef($bookItem["book"]->author) . "_" . Text::generateNamefromURL($bookItem["book"]->url);
 			$bookFolderPath = $bookItem["outputPath"] . self::DIRECTORY_SEPARATOR . $bookFolderName; // путь к папке с задачами
 
 			$taskListParsedSuccessfully = false;
@@ -298,7 +298,7 @@ class GDZParser
 					foreach ($storedTasks as $taskItem) {
 						$tasksItemsList[] = [
 							"outputPath" => $bookFolderPath,
-							"tasksList" => TaskListItemDTO::FromArray($taskItem)
+							"tasksList" => TaskListItemDTO::fromArray($taskItem)
 						];
 					}
 
@@ -419,11 +419,11 @@ class GDZParser
 
 			// [OUTPUT] Название файла с задачей
 			$outputTaskFileName = "";
-			if(is_string($tasksItemsListItem["tasksList"]->chapter)) $outputTaskFileName .= Text::TranslitRef($tasksItemsListItem["tasksList"]->chapter);
+			if(is_string($tasksItemsListItem["tasksList"]->chapter)) $outputTaskFileName .= Text::translitRef($tasksItemsListItem["tasksList"]->chapter);
 
-			if(is_string($tasksItemsListItem["tasksList"]->url)) $outputTaskFileName .= "_" . Text::GenerateNameFromURL($tasksItemsListItem["tasksList"]->url);
+			if(is_string($tasksItemsListItem["tasksList"]->url)) $outputTaskFileName .= "_" . Text::generateNamefromURL($tasksItemsListItem["tasksList"]->url);
 
-			if(is_string($tasksItemsListItem["tasksList"]->title)) $outputTaskFileName .= "_" . Text::TranslitRef($tasksItemsListItem["tasksList"]->title);
+			if(is_string($tasksItemsListItem["tasksList"]->title)) $outputTaskFileName .= "_" . Text::translitRef($tasksItemsListItem["tasksList"]->title);
 
 			$outputTaskFileName = trim($outputTaskFileName, "_");
 			$outputTaskFileName .= ".json";

@@ -24,7 +24,7 @@ class ReshakTaskParser implements TaskParserInterface
 	 * @param string $href Исходная ссылка
 	 * @return string
 	 */
-	private function MakeAbsoluteURL(string $href): string
+	private function makeAbsoluteURL(string $href): string
 	{
 		$href = trim($href);
 
@@ -48,19 +48,19 @@ class ReshakTaskParser implements TaskParserInterface
 	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): TaskDTO
 	{
 		// обработка относительных ссылок
-		$url = Text::MakeAbsoluteURL(self::DOMAIN, $url);
+		$url = Text::makeAbsoluteURL(self::DOMAIN, $url);
 
 		// если ссылка оказывается картинкой, то тогда просто извлекаем картинку
-		if (CURL::IsURLImage($url)) {
+		if (CURL::isURLImage($url)) {
 			$resultTitle = "";
 			$resultContent = "";
 			$resultImages = [
-				Base64Image::FromURL($url, $proxy, $timeout)
+				Base64Image::fromURL($url, $proxy, $timeout)
 			];
 		} else {
 
 			// получаем HTML-код страницы
-			$html = CURL::FileGetContents($url, $proxy, $timeout);
+			$html = CURL::fileGetContents($url, $proxy, $timeout);
 
 			if (!$html) {
 				throw new PageNotFoundException("Can't open {$url}.");
@@ -91,7 +91,7 @@ class ReshakTaskParser implements TaskParserInterface
 
 			$resultTitleNode = $article->findOneOrFalse(".titleh1");
 			if ($resultTitleNode) {
-				$resultTitle = Text::CleanupText(strip_tags($resultTitleNode->innerText()));
+				$resultTitle = Text::cleanupText(strip_tags($resultTitleNode->innerText()));
 				unset($resultTitleNode); // чистим память
 			}
 
@@ -100,7 +100,7 @@ class ReshakTaskParser implements TaskParserInterface
 			$resultContentNode = $article->findOneOrFalse(".text_zad");
 
 			if ($resultContentNode) {
-				$resultContent = Text::CleanupText(strip_tags($resultContentNode->innerText()));
+				$resultContent = Text::cleanupText(strip_tags($resultContentNode->innerText()));
 				unset($resultContentNode); // чистим память
 			}
 
@@ -114,12 +114,12 @@ class ReshakTaskParser implements TaskParserInterface
 					if (empty($imageURL)) {
 						$imageURL = $image->getAttribute("data-src");
 					}
-					$imageURL = $this->MakeAbsoluteURL($imageURL);
+					$imageURL = $this->makeAbsoluteURL($imageURL);
 
 					// загружаем к себе изображение в base64 формате
 					try {
-						$imageObject = Base64Image::FromURL($imageURL, $proxy, $timeout);
-						$resultImages[] = $imageObject->GetBase64();
+						$imageObject = Base64Image::fromURL($imageURL, $proxy, $timeout);
+						$resultImages[] = $imageObject->getBase64();
 					} catch (Exception $e) {
 						error_log($e->getMessage());
 					}

@@ -63,7 +63,7 @@ class Base64Image
 	 * @throws EncodeException
 	 * @return Base64Image
 	 */
-	public static function FromURL(string $url, ?Proxy $proxy = null, ?int $timeout = null): self
+	public static function fromURL(string $url, ?Proxy $proxy = null, ?int $timeout = null): self
 	{
 		// проверки на корректный URL
 		if (!filter_var($url, FILTER_VALIDATE_URL)) {
@@ -76,7 +76,7 @@ class Base64Image
 		}
 
 		// получаем содержимое
-		$content = CURL::FileGetImage($url, $proxy, $timeout);
+		$content = CURL::fileGetImage($url, $proxy, $timeout);
 
 		// проверка полученного содержимого на корректность
 		if ($content === false) {
@@ -97,7 +97,7 @@ class Base64Image
 	 * @param string $path Путь сохранения
 	 * @return void
 	 */
-	public function Save(string $path): void
+	public function save(string $path): void
 	{
 		file_put_contents($path, base64_decode($this->base64));
 	}
@@ -106,7 +106,7 @@ class Base64Image
 	 * Получить Base64 изображение в виде готовой ссылки
 	 * @return string
 	 */
-	public function GetBase64URL(): string
+	public function getBase64URL(): string
 	{
 		return "data:{$this->mime};base64,{$this->base64}";
 	}
@@ -115,7 +115,7 @@ class Base64Image
 	 * Получить исходный Base64
 	 * @return string
 	 */
-	public function GetBase64(): string
+	public function getBase64(): string
 	{
 		return $this->base64;
 	}
@@ -124,7 +124,7 @@ class Base64Image
 	 * Получить Mime-type текущего изображения
 	 * @return string
 	 */
-	public function GetMime(): string
+	public function getMime(): string
 	{
 		return $this->mime;
 	}
