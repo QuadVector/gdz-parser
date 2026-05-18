@@ -88,28 +88,28 @@ class GDZParser
 		// проверка на наличие входных URL
 		if (count($this->config->startURLs) == 0) {
 			// [OUTPUT] выводим сообщение об ошибке
-			$this->cli->output("<red>Start URLs must not be empty!</red>");
+			$this->cli->error("Start URLs must not be empty!");
 			return;
 		}
 
 		// проверка на наличие папки для сохранения результата
 		if (empty($this->config->parseOutputFolder)) {
 			// [OUTPUT] выводим сообщение об ошибке
-			$this->cli->output("<red>Output folder must be specified!</red>");
+			$this->cli->error("Output folder must be specified!");
 			return;
 		}
 
 		// проверка на корректность количества попыток
 		if ($this->config->attempts < 1) {
 			// [OUTPUT] выводим сообщение об ошибке
-			$this->cli->output("<red>Attempts must be greater than or equal to 1!</red>");
+			$this->cli->error("Attempts must be greater than or equal to 1!");
 			return;
 		}
 
 		// проверка на корректность таймаута
 		if ($this->config->timeout < 1) {
 			// [OUTPUT] выводим сообщение об ошибке
-			$this->cli->output("<red>Timeout must be greater than or equal to 1!</red>");
+			$this->cli->error("Timeout must be greater than or equal to 1!");
 			return;
 		}
 
