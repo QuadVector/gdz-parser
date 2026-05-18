@@ -14,7 +14,7 @@ final class GDZParserConfig
 	 * @param BookParserInterface $bookParser Контекст парсера книг
 	 * @param TaskListParserInterface $taskListParser Контекст парсера списка заданий
 	 * @param TaskParserInterface $taskParser Контекст парсера заданий
-	 * @param Proxy[] $proxies Список прокси-серверов
+	 * @param Proxy[] $proxy Список прокси-серверов
 	 * @param string[] $startURLs Начальные URL, где находятся книги
 	 * @param int $attempts Количество попыток парсинга
 	 * @param int $timeout Таймаут на выполнение одного CURL-запроса
@@ -26,21 +26,35 @@ final class GDZParserConfig
 		public readonly BookParserInterface $bookParser,
 		public readonly TaskListParserInterface $taskListParser,
 		public readonly TaskParserInterface $taskParser,
-		public readonly array $proxies = [],
+		public readonly array $proxy = [],
 		public readonly array $startURLs = [],
 		public readonly int $attempts = 5,
 		public readonly int $timeout = 5,
 		public readonly string $parseOutputFolder,
 		public readonly bool $showLogs = false
 	) {
-		foreach ($this->proxies as $proxy) {
+		foreach ($this->proxy as $proxy) {
 			if (!$proxy instanceof Proxy) {
-				throw new InvalidArgumentException('All proxies must be instances of Proxy class.');
+				throw new InvalidArgumentException('All proxy must be instances of Proxy class.');
 			}
+		}
 
-			if(is_null($parseOutputFolder)) {
-				throw new InvalidArgumentException('Need to set output folder.');
+		foreach ($this->startURLs as $startURL) {
+			if (!is_string($startURL) || trim($startURL) === '') {
+				throw new InvalidArgumentException('All start URLs must be non-empty strings.');
 			}
+		}
+
+		if ($this->attempts < 1) {
+			throw new InvalidArgumentException('Attempts must be greater than or equal to 1.');
+		}
+
+		if ($this->timeout < 1) {
+			throw new InvalidArgumentException('Timeout must be greater than or equal to 1.');
+		}
+
+		if (trim($this->parseOutputFolder) === '') {
+			throw new InvalidArgumentException('Need to set output folder.');
 		}
 	}
 }
