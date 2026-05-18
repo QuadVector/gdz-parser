@@ -44,11 +44,15 @@ class GDZParser
 
 	/**
 	 * Получить рандомный прокси-сервер из конфига
-	 * @return Proxy
+	 * @return Proxy|null
 	 */
-	private function getRandomProxy(): Proxy
+	private function getRandomProxy(): Proxy|null
 	{
-		return $this->config->proxies[array_rand($this->config->proxies)];
+		if (count($this->config->proxy) == 0) {
+			return null;
+		} else {
+			return $this->config->proxy[array_rand($this->config->proxy)];
+		}
 	}
 
 	/**
@@ -70,8 +74,11 @@ class GDZParser
 		$this->cli->output("<bold>Timeout:</bold>\t {$this->config->timeout}");
 		$this->cli->output("<bold>Show logs:</bold>\t {$this->config->showLogs}");
 		$this->cli->output("<bold>Output folder:</bold>\t {$this->config->parseOutputFolder}")->br();
-		$this->cli->output("<bold>Proxies:</bold>");
-		$this->cli->table($this->config->proxies)->br();
+
+		if ($this->config->proxy) {
+			$this->cli->output("<bold>Proxies:</bold>");
+			$this->cli->table($this->config->proxy)->br();
+		}
 
 		// счетчики
 		$totalBooksCount = 0;
@@ -82,6 +89,27 @@ class GDZParser
 		if (count($this->config->startURLs) == 0) {
 			// [OUTPUT] выводим сообщение об ошибке
 			$this->cli->output("<red>Start URLs must not be empty!</red>");
+			return;
+		}
+
+		// проверка на наличие папки для сохранения результата
+		if (empty($this->config->parseOutputFolder)) {
+			// [OUTPUT] выводим сообщение об ошибке
+			$this->cli->output("<red>Output folder must be specified!</red>");
+			return;
+		}
+
+		// проверка на корректность количества попыток
+		if ($this->config->attempts < 1) {
+			// [OUTPUT] выводим сообщение об ошибке
+			$this->cli->output("<red>Attempts must be greater than or equal to 1!</red>");
+			return;
+		}
+
+		// проверка на корректность таймаута
+		if ($this->config->timeout < 1) {
+			// [OUTPUT] выводим сообщение об ошибке
+			$this->cli->output("<red>Timeout must be greater than or equal to 1!</red>");
 			return;
 		}
 
@@ -201,13 +229,13 @@ class GDZParser
 
 							// [OUTPUT] Сохраняем информацию о книгах в JSON-файл внутрь папки
 							if ($this->config->showLogs) $this->cli->output("Saving books info to <yellow>{$outputStartURLFolderPath}\\books.json...</yellow>");
-							
+
 							$saveStatus = file_put_contents($outputStartURLFolderPath . '\\books.json', json_encode(
 								$books,
 								JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 							));
 
-							if(!$saveStatus) {
+							if (!$saveStatus) {
 								if ($this->config->showLogs) $this->cli->output("<red>Failed to save books info to <yellow>{$outputStartURLFolderPath}\\books.json...</yellow></red>");
 							}
 						}
@@ -347,7 +375,7 @@ class GDZParser
 								JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 							));
 
-							if(!$saveStatus) {
+							if (!$saveStatus) {
 								if ($this->config->showLogs) $this->cli->output("<red>Failed to save task items lists to <yellow>{$bookFolderPath}\\taskList.json!</red>");
 							}
 						}
@@ -419,11 +447,11 @@ class GDZParser
 
 			// [OUTPUT] Название файла с задачей
 			$outputTaskFileName = "";
-			if(is_string($tasksItemsListItem["tasksList"]->chapter)) $outputTaskFileName .= Text::translitRef($tasksItemsListItem["tasksList"]->chapter);
+			if (is_string($tasksItemsListItem["tasksList"]->chapter)) $outputTaskFileName .= Text::translitRef($tasksItemsListItem["tasksList"]->chapter);
 
-			if(is_string($tasksItemsListItem["tasksList"]->url)) $outputTaskFileName .= "_" . Text::generateNamefromURL($tasksItemsListItem["tasksList"]->url);
+			if (is_string($tasksItemsListItem["tasksList"]->url)) $outputTaskFileName .= "_" . Text::generateNamefromURL($tasksItemsListItem["tasksList"]->url);
 
-			if(is_string($tasksItemsListItem["tasksList"]->title)) $outputTaskFileName .= "_" . Text::translitRef($tasksItemsListItem["tasksList"]->title);
+			if (is_string($tasksItemsListItem["tasksList"]->title)) $outputTaskFileName .= "_" . Text::translitRef($tasksItemsListItem["tasksList"]->title);
 
 			$outputTaskFileName = trim($outputTaskFileName, "_");
 			$outputTaskFileName .= ".json";
@@ -432,7 +460,7 @@ class GDZParser
 			$outputTaskFileName = Text::makeSafeJSONFileName($outputTaskFileName);
 
 			// директория, где будет находиться задача, совпадает с директорией списка задач, т.к. это конечный элемент
-			$outputStartURLFolderPath = $tasksItemsListItem["outputPath"]; 
+			$outputStartURLFolderPath = $tasksItemsListItem["outputPath"];
 			$outputTaskFullFileName = $outputStartURLFolderPath . self::DIRECTORY_SEPARATOR . $outputTaskFileName;
 
 			$taskParsedSuccessfully = false;
@@ -462,7 +490,7 @@ class GDZParser
 							JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 						));
 
-						if(!$saveStatus) {
+						if (!$saveStatus) {
 							if ($this->config->showLogs) $this->cli->red()->out("Failed to save data to <yellow>{$outputTaskFullFileName}</yellow>");
 						}
 
