@@ -52,7 +52,7 @@ if (isset($options["proxy"])) {
 
 /*
     Пример консольной команды:
-    php index.php --start-urls="https://reshak.ru/tag/4klass.html" --proxy=96.62.194.189:6391:mkubsocc:zt8bk98vbqn9,31.98.15.181:5358:mkubsocc:zt8bk98vbqn9 --attempts=5 --timeout=5
+    php index.php --start-urls="https://reshak.ru/tag/4klass.html" --proxy="96.62.194.189:6391:mkubsocc:zt8bk98vbqn9,31.98.15.181:5358:mkubsocc:zt8bk98vbqn9" --attempts=5 --timeout=5
 */
 
 $GDZParser = new GDZParser(
