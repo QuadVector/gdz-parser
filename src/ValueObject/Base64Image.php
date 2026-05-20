@@ -46,7 +46,6 @@ class Base64Image
 			'image/png',
 			'image/jpeg',
 			'image/webp',
-			'image/gif',
 		];
 
 		if (!in_array($this->mime, $allowedMime, true)) {
