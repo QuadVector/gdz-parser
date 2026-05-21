@@ -32,11 +32,11 @@ final class BookDTO
 	public static function fromArray(array $data): self
 	{
 		return new self(
-			$data['title'],
-			$data['author'],
-			$data['grade'],
-			$data['subject'],
-			$data['url'],
+			trim($data['title']),
+			trim($data['author']),
+			trim($data['grade']),
+			trim($data['subject']),
+			trim($data['url'])
 		);
 	}
 }

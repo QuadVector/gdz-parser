@@ -31,9 +31,9 @@ final class TaskDTO
 	public static function fromArray(array $data): self
 	{
 		return new self(
-			$data['title'],
-			$data['url'],
-			$data['content'],
+			trim($data['title']),
+			trim($data['url']),
+			trim($data['content']),
 			$data['images']
 		);
 	}

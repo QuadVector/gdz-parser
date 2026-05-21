@@ -27,9 +27,9 @@ final class TaskListItemDTO
 	public static function fromArray(array $data): self
 	{
 		return new self(
-			$data['title'],
-			$data['url'],
-			$data['chapter']
+			trim($data['title']),
+			trim($data['url']),
+			trim($data['chapter'])
 		);
 	}
 }
