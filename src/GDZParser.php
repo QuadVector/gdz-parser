@@ -117,7 +117,7 @@ class GDZParser
 		// [OUTPUT] создаем прогрессбар
 		if (!$this->config->showLogs) {
 			$startURLsProgressBar = $this->cli->progress()->total($startURLsCount);
-			$startURLsProgressBar->current(0, "Parsing books from start URLs [0 / {$startURLsCount}]");
+			$startURLsProgressBar->current(0, "<bold>[0 / {$startURLsCount}]</bold> Parsing books from start URLs");
 		}
 
 		// выводим приветствие
@@ -269,7 +269,7 @@ class GDZParser
 			$startURLsProgress++;
 
 			// [OUTPUT] обновляем прогрессбар
-			if (!$this->config->showLogs) $startURLsProgressBar->current($startURLsProgress, "Parsing books from start URLs [{$startURLsProgress} / {$startURLsCount}]");
+			if (!$this->config->showLogs) $startURLsProgressBar->current($startURLsProgress, "<bold>[{$startURLsProgress} / {$startURLsCount}]</bold> Parsing books from start URLs");
 
 			unset(
 				$startURL,
@@ -301,7 +301,7 @@ class GDZParser
 		// [OUTPUT] создаем прогрессбар
 		if (!$this->config->showLogs) {
 			$taskListProgressBar = $this->cli->progress()->total($totalBooksCount);
-			$taskListProgressBar->current(0, "Parsing task items lists [0 / {$totalBooksCount}]");
+			$taskListProgressBar->current(0, "<bold>[0 / {$totalBooksCount}]</bold> Parsing task items lists");
 		}
 
 		foreach ($booksList as $bookItem) {
@@ -411,7 +411,7 @@ class GDZParser
 			$taskListProgress++;
 
 			// [OUTPUT] обновляем прогрессбар
-			if (!$this->config->showLogs) $taskListProgressBar->current($taskListProgress, "Parsing task items lists [{$taskListProgress} / {$totalBooksCount}]");
+			if (!$this->config->showLogs) $taskListProgressBar->current($taskListProgress, "<bold>[{$taskListProgress} / {$totalBooksCount}]</bold> Parsing task items lists");
 
 			unset(
 				$bookItem,
@@ -441,7 +441,7 @@ class GDZParser
 		// [OUTPUT] создаем прогрессбар
 		if (!$this->config->showLogs) {
 			$tasksProgressBar = $this->cli->progress()->total($totalTasksCount);
-			$tasksProgressBar->current(0, "Parsing tasks [0 / {$totalTasksCount}]");
+			$tasksProgressBar->current(0, "<bold>[0 / {$totalTasksCount}]</bold> Parsing tasks");
 		}
 
 		foreach ($tasksItemsList as $tasksItemsListItem) {
@@ -516,7 +516,7 @@ class GDZParser
 			$tasksProgress++;
 
 			// [OUTPUT] обновляем прогрессбар
-			if (!$this->config->showLogs) $tasksProgressBar->current($tasksProgress, "Parsing tasks [{$tasksProgress} / {$totalTasksCount}]");
+			if (!$this->config->showLogs) $tasksProgressBar->current($tasksProgress, "<bold>[{$tasksProgress} / {$totalTasksCount}]</bold> Parsing tasks");
 
 			unset(
 				$outputTaskFileName,
