@@ -25,8 +25,6 @@ class GDZParser
 	protected ?TaskListParserContext $taskListParserContext = null;
 	protected ?TaskParserContext $taskParserContext = null;
 
-	const DIRECTORY_SEPARATOR = '\\';
-
 	/**
 	 * Конструктор
 	 * @param GDZParserConfig $config
@@ -165,7 +163,7 @@ class GDZParser
 
 			// [OUTPUT] Название папки с текущей ссылкой
 			$outputStartURLFolderName = Text::generateNamefromURL($startURL);
-			$outputStartURLFolderPath = $this->config->parseOutputFolder . self::DIRECTORY_SEPARATOR . $outputStartURLFolderName;
+			$outputStartURLFolderPath = $this->config->parseOutputFolder . DIRECTORY_SEPARATOR . $outputStartURLFolderName;
 
 			$startURLParsedSuccessfully = false;
 
@@ -183,7 +181,7 @@ class GDZParser
 				});
 
 				$parseFiles = array_map(function ($item) use ($outputStartURLFolderPath) {
-					return $outputStartURLFolderPath . self::DIRECTORY_SEPARATOR . $item;
+					return $outputStartURLFolderPath . DIRECTORY_SEPARATOR . $item;
 				}, $parseFiles);
 
 				// [OUTPUT] восстанавливаем объекты книг
@@ -328,7 +326,7 @@ class GDZParser
 
 			// [OUTPUT] Название папки с задачами по конкретной книге
 			$bookFolderName = Text::translitRef($bookItem["book"]->title) . "_" . Text::translitRef($bookItem["book"]->author) . "_" . Text::generateNamefromURL($bookItem["book"]->url);
-			$bookFolderPath = $bookItem["outputPath"] . self::DIRECTORY_SEPARATOR . $bookFolderName; // путь к папке с задачами
+			$bookFolderPath = $bookItem["outputPath"] . DIRECTORY_SEPARATOR . $bookFolderName; // путь к папке с задачами
 
 			$taskListParsedSuccessfully = false;
 
@@ -482,7 +480,7 @@ class GDZParser
 
 			// директория, где будет находиться задача, совпадает с директорией списка задач, т.к. это конечный элемент
 			$outputStartURLFolderPath = $tasksItemsListItem["outputPath"];
-			$outputTaskFullFileName = $outputStartURLFolderPath . self::DIRECTORY_SEPARATOR . $outputTaskFileName;
+			$outputTaskFullFileName = $outputStartURLFolderPath . DIRECTORY_SEPARATOR . $outputTaskFileName;
 
 			if (file_exists($outputTaskFullFileName)) {
 				// [OUTPUT] Пропускаем, т.к. файл уже существует, и его парсить не требуется
