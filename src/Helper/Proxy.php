@@ -31,7 +31,7 @@ final class Proxy
 		$parts = explode(':', trim($proxy));
 
 		if (count($parts) < 2) {
-			throw new InvalidArgumentException("Некорректный формат proxy: {$proxy}");
+			throw new InvalidArgumentException("Uncorrect proxy format: {$proxy}. Must be ip:port:login:password");
 		}
 
 		return new self(

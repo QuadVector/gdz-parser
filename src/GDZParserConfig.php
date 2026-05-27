@@ -11,9 +11,9 @@ use InvalidArgumentException;
 final class GDZParserConfig
 {
 	/**
-	 * @param BookParserInterface $bookParser Контекст парсера книг
-	 * @param TaskListParserInterface $taskListParser Контекст парсера списка заданий
-	 * @param TaskParserInterface $taskParser Контекст парсера заданий
+	 * @param ?BookParserInterface $bookParser Контекст парсера книг
+	 * @param ?TaskListParserInterface $taskListParser Контекст парсера списка заданий
+	 * @param ?TaskParserInterface $taskParser Контекст парсера заданий
 	 * @param Proxy[] $proxy Список прокси-серверов
 	 * @param string[] $startURLs Начальные URL, где находятся книги
 	 * @param int $attempts Количество попыток парсинга
@@ -23,9 +23,9 @@ final class GDZParserConfig
 	 * @throws InvalidArgumentException
 	 */
 	public function __construct(
-		public readonly BookParserInterface $bookParser,
-		public readonly TaskListParserInterface $taskListParser,
-		public readonly TaskParserInterface $taskParser,
+		public readonly ?BookParserInterface $bookParser = null,
+		public readonly ?TaskListParserInterface $taskListParser = null,
+		public readonly ?TaskParserInterface $taskParser = null,
 		public readonly array $proxy = [],
 		public readonly array $startURLs = [],
 		public readonly int $attempts = 5,

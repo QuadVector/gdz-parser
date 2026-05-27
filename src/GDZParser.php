@@ -21,9 +21,9 @@ class GDZParser
 {
 	protected CLImate $cli;
 	protected GDZParserConfig $config; // класс с конфигурацией
-	protected BookParserContext $bookParserContext;
-	protected TaskListParserContext $taskListParserContext;
-	protected TaskParserContext $taskParserContext;
+	protected ?BookParserContext $bookParserContext = null;
+	protected ?TaskListParserContext $taskListParserContext = null;
+	protected ?TaskParserContext $taskParserContext = null;
 
 	const DIRECTORY_SEPARATOR = '\\';
 
@@ -37,9 +37,17 @@ class GDZParser
 		$this->config = $config;
 
 		// инициализируем стратегии
-		$this->bookParserContext = new BookParserContext($this->config->bookParser);
-		$this->taskListParserContext = new TaskListParserContext($this->config->taskListParser);
-		$this->taskParserContext = new TaskParserContext($this->config->taskParser);
+		if (!is_null($this->config->bookParser)) {
+			$this->bookParserContext = new BookParserContext($this->config->bookParser);
+		}
+
+		if (!is_null($this->config->taskListParser)) {
+			$this->taskListParserContext = new TaskListParserContext($this->config->taskListParser);
+		}
+
+		if (!is_null($this->config->taskParser)) {
+			$this->taskParserContext = new TaskParserContext($this->config->taskParser);
+		}
 	}
 
 	/**
@@ -72,7 +80,7 @@ class GDZParser
 		$this->cli->output("<bold>URLs count:</bold>\t {$startURLsCount}");
 		$this->cli->output("<bold>Attempts:</bold>\t {$this->config->attempts}");
 		$this->cli->output("<bold>Timeout:</bold>\t {$this->config->timeout}");
-		$this->cli->output("<bold>Show logs:</bold>\t {$this->config->showLogs}");
+		$this->cli->output("<bold>Show logs:</bold>\t" . ($this->config->showLogs ? "<green>Yes</green>" : "<red>No</red>"));
 		$this->cli->output("<bold>Output folder:</bold>\t {$this->config->parseOutputFolder}")->br();
 
 		if ($this->config->proxy) {
@@ -85,6 +93,13 @@ class GDZParser
 		$successstartURLsCount = 0;
 		$skippedStartURLsCount = 0;
 		$startURLsProgress = 0;
+
+		// проверка на наличие контекстов парсера
+		if (is_null($this->config->bookParser) || is_null($this->config->taskListParser) || is_null($this->config->taskParser)) {
+			// [OUTPUT] выводим сообщение об ошибке
+			$this->cli->error("Parser must be specified!");
+			return;
+		}
 
 		// проверка на наличие входных URL
 		if (count($this->config->startURLs) == 0) {
