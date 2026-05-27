@@ -120,6 +120,10 @@ if (cliOptionPassed($argv, "proxy")) {
     $proxy = [];
 }
 
+$proxy = array_map(function (string $item) {
+    return Proxy::fromString($item);
+}, $proxy);
+
 // контексты парсера
 switch ($parser) {
     case "reshak":
@@ -148,9 +152,7 @@ $GDZParser = new GDZParser(
         taskListParser: $taskListParser,
         taskParser: $taskParser,
         startURLs: $startURLs,
-        proxy: array_map(function (string $item) {
-            return Proxy::fromString($item);
-        }, $proxy),
+        proxy: $proxy,
         attempts: $attempts,
         timeout: $timeout,
         parseOutputFolder: $outputFolder,
