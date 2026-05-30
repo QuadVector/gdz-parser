@@ -45,8 +45,8 @@ final class CURL
 		curl_setopt(self::$ch, CURLOPT_URL, $url);
 		curl_setopt(self::$ch, CURLOPT_TIMEOUT, $timeout ?? 30);
 
-		if ($proxy && $proxy->host && $proxy->port) {
-			curl_setopt(self::$ch, CURLOPT_PROXY, "{$proxy->host}:{$proxy->port}");
+		if ($proxy && $proxy->ip && $proxy->port) {
+			curl_setopt(self::$ch, CURLOPT_PROXY, "{$proxy->ip}:{$proxy->port}");
 
 			if ($proxy->login && $proxy->password) {
 				curl_setopt(self::$ch, CURLOPT_PROXYUSERPWD, "{$proxy->login}:{$proxy->password}");
@@ -111,8 +111,8 @@ final class CURL
 		]);
 
 		if ($proxy !== null) {
-			if (!empty($proxy->host) && !empty($proxy->port)) {
-				curl_setopt($ch, CURLOPT_PROXY, $proxy->host . ':' . $proxy->port);
+			if (!empty($proxy->ip) && !empty($proxy->port)) {
+				curl_setopt($ch, CURLOPT_PROXY, $proxy->ip . ':' . $proxy->port);
 			}
 
 			if (!empty($proxy->login) && !empty($proxy->password)) {

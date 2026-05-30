@@ -8,13 +8,13 @@ final class Proxy
 {
 	/**
 	 * Конструктор
-	 * @param string $host // IP сервера
+	 * @param string $ip // IP сервера
 	 * @param int $port // порт
 	 * @param mixed $login // логин
 	 * @param mixed $password // пароль
 	 */
 	public function __construct(
-		public readonly string $host,
+		public readonly string $ip,
 		public readonly int $port,
 		public readonly ?string $login = null,
 		public readonly ?string $password = null,
@@ -35,7 +35,7 @@ final class Proxy
 		}
 
 		return new self(
-			host: $parts[0],
+			ip: $parts[0],
 			port: (int) $parts[1],
 			login: $parts[2] ?? null,
 			password: $parts[3] ?? null,
@@ -49,7 +49,7 @@ final class Proxy
 	public function toString(): string
 	{
 		return implode(":", [
-			$this->host,
+			$this->ip,
 			$this->port,
 			$this->login,
 			$this->password,
