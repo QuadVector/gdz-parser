@@ -9,7 +9,7 @@ use QuadVector\GDZParser\Exception\AccessDeniedException;
 use QuadVector\GDZParser\Exception\PageNotFoundException;
 use QuadVector\GDZParser\Exception\ParseException;
 use QuadVector\GDZParser\Helper\CURL;
-use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\ValueObject\Proxy;
 use QuadVector\GDZParser\Helper\Text;
 use QuadVector\GDZParser\ValueObject\Base64Image;
 

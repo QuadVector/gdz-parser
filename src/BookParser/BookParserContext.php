@@ -4,7 +4,7 @@ namespace QuadVector\GDZParser\BookParser;
 
 use QuadVector\GDZParser\DTO\BookDTO;
 use QuadVector\GDZParser\BookParser\BookParserInterface;
-use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\ValueObject\Proxy;
 
 class BookParserContext
 {

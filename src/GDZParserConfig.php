@@ -5,7 +5,7 @@ namespace QuadVector\GDZParser;
 use QuadVector\GDZParser\BookParser\BookParserInterface;
 use QuadVector\GDZParser\TaskListParser\TaskListParserInterface;
 use QuadVector\GDZParser\TaskParser\TaskParserInterface;
-use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\ValueObject\Proxy;
 use InvalidArgumentException;
 
 final class GDZParserConfig

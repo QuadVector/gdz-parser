@@ -8,7 +8,7 @@ use QuadVector\GDZParser\TaskListParser\TaskListParserContext;
 use QuadVector\GDZParser\TaskParser\TaskParserContext;
 use QuadVector\GDZParser\DTO\BookDTO;
 use QuadVector\GDZParser\DTO\TaskListItemDTO;
-use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\ValueObject\Proxy;
 use QuadVector\GDZParser\Helper\Text;
 use QuadVector\GDZParser\Exception\AccessDeniedException;
 use QuadVector\GDZParser\Exception\PageNotFoundException;

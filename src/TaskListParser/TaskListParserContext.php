@@ -4,7 +4,7 @@ namespace QuadVector\GDZParser\TaskListParser;
 
 use QuadVector\GDZParser\DTO\TaskListItemDTO;
 use QuadVector\GDZParser\TaskListParser\TaskListParserInterface;
-use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\ValueObject\Proxy;
 
 class TaskListParserContext
 {

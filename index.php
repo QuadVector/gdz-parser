@@ -11,7 +11,7 @@ use QuadVector\GDZParser\GDZParserConfig;
 use QuadVector\GDZParser\BookParser\ReshakBookParser;
 use QuadVector\GDZParser\TaskListParser\ReshakTaskListParser;
 use QuadVector\GDZParser\TaskParser\ReshakTaskParser;
-use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\ValueObject\Proxy;
 
 // входные параметры CLI
 // данные параметры имеют больший приоритет, чем параметры, указанные в config.php

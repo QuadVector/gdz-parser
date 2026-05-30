@@ -3,7 +3,7 @@
 namespace QuadVector\GDZParser\BookParser;
 
 use QuadVector\GDZParser\DTO\BookDTO;
-use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\ValueObject\Proxy;
 
 interface BookParserInterface
 {

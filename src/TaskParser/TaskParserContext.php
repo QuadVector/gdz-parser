@@ -4,7 +4,7 @@ namespace QuadVector\GDZParser\TaskParser;
 
 use QuadVector\GDZParser\DTO\TaskDTO;
 use QuadVector\GDZParser\TaskParser\TaskParserInterface;
-use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\ValueObject\Proxy;
 
 class TaskParserContext
 {

@@ -1,6 +1,6 @@
 <?php
 
-namespace QuadVector\GDZParser\Helper;
+namespace QuadVector\GDZParser\ValueObject;
 
 use \InvalidArgumentException;
 

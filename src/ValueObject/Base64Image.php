@@ -3,7 +3,7 @@
 namespace QuadVector\GDZParser\ValueObject;
 
 use QuadVector\GDZParser\Helper\CURL;
-use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\ValueObject\Proxy;
 use QuadVector\GDZParser\Exception\AccessDeniedException;
 use QuadVector\GDZParser\Exception\EncodeException;
 use QuadVector\GDZParser\Exception\DecodeException;

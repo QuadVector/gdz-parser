@@ -2,7 +2,7 @@
 
 namespace QuadVector\GDZParser\Helper;
 
-use QuadVector\GDZParser\Helper\Proxy;
+use QuadVector\GDZParser\ValueObject\Proxy;
 
 final class CURL
 {
