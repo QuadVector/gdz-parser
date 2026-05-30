@@ -41,4 +41,18 @@ final class Proxy
 			password: $parts[3] ?? null,
 		);
 	}
+
+	/**
+	 * Сгенерировать строку в формате ip:port:login:password
+	 * @return string
+	 */
+	public function toString(): string
+	{
+		return implode(":", [
+			$this->host,
+			$this->port,
+			$this->login,
+			$this->password,
+		]);
+	}
 }
