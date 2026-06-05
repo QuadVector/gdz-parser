@@ -17,6 +17,7 @@
     "minimum-stability": "stable",
     "require": {
         "voku/simple_html_dom": "^4.8",
-        "league/climate": "^3.10"
+        "league/climate": "^3.10",
+        "vlucas/phpdotenv": "^5.6"
     }
 }

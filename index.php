@@ -4,7 +4,6 @@ set_time_limit(0);
 error_reporting(E_ERROR | E_PARSE);
 
 require_once("vendor/autoload.php");
-require_once("config.php");
 
 use QuadVector\GDZParser\GDZParser;
 use QuadVector\GDZParser\GDZParserConfig;
@@ -12,9 +11,14 @@ use QuadVector\GDZParser\BookParser\ReshakBookParser;
 use QuadVector\GDZParser\TaskListParser\ReshakTaskListParser;
 use QuadVector\GDZParser\TaskParser\ReshakTaskParser;
 use QuadVector\GDZParser\ValueObject\Proxy;
+use QuadVector\GDZParser\Helper\Text;
 
-// входные параметры CLI
-// данные параметры имеют больший приоритет, чем параметры, указанные в config.php
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->safeLoad();
+
+$config = require_once("src/config.php"); // подключение файла конфигурации
+
+// обработка входных параметров
 $inputOptions = getopt("", [
     "logs",
     "output:",
@@ -25,89 +29,99 @@ $inputOptions = getopt("", [
     "proxy:",
 ]);
 
-/**
- * Введен ли входной параметр в консоли
- * @param array $argv Массив с входными параметрами CLI
- * @param string $optionName Название параметра
- * @return bool
- */
-function cliOptionPassed(array $argv, string $optionName): bool
-{
-    $option = '--' . $optionName;
-
-    foreach ($argv as $arg) {
-        if ($arg === $option) {
-            return true;
-        }
-
-        if (str_starts_with($arg, $option . '=')) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 $showLogs = isset($inputOptions["logs"]); // показывать логи
 
 // папка для сохранения результатов
-if (isset($inputOptions["output"])) {
-    $outputFolder = $inputOptions["output"];
-} elseif (isset($config["output"])) {
-    $outputFolder = $config["output"];
+if (isset($inputOptions["output"]) && trim((string) $inputOptions["output"]) !== "") {
+    $outputFolder = $inputOptions["output"]; // входная переменная
+} elseif (isset($_ENV["OUTPUT_FOLDER"]) && trim((string) $_ENV["OUTPUT_FOLDER"]) !== "") {
+    $outputFolder = $_ENV["OUTPUT_FOLDER"]; // переменная окружения
+} elseif (isset($config["output_folder"]) && trim((string) $config["output_folder"]) !== "") {
+    $outputFolder = $config["output_folder"]; // значение по умолчанию
 } else {
-    $outputFolder = null;
+    throw new RuntimeException(
+        "Output folder isn't defined. Use --output in CLI, OUTPUT_FOLDER in .env or config['output_folder'] in src/config.php."
+    );
+}
+
+// тип парсера
+if (isset($inputOptions["parser"]) && trim((string) $inputOptions["parser"]) !== "") {
+    $parser = $inputOptions["parser"]; // входная переменная
+} elseif (isset($_ENV["PARSER"]) && trim((string) $_ENV["PARSER"]) !== "") {
+    $parser = $_ENV["PARSER"]; // переменная окружения
+} elseif (isset($config["parser"]) && trim((string) $config["parser"]) !== "") {
+    $parser = $config["parser"]; // значение по умолчанию
+} else {
+    throw new RuntimeException(
+        "Parser isn't defined. Use --parser in CLI, PARSER in .env or config['parser'] in src/config.php."
+    );
 }
 
 // кол-во попыток
-if (isset($inputOptions["attempts"])) {
-    $attempts = (int)$inputOptions["attempts"];
+if (isset($inputOptions["attempts"]) && trim((string) $inputOptions["attempts"]) !== "") {
+    $attempts = (int) $inputOptions["attempts"]; // входная переменная
+} elseif (isset($_ENV["ATTEMPTS"]) && trim((string) $_ENV["ATTEMPTS"]) !== "") {
+    $attempts = (int) $_ENV["ATTEMPTS"]; // переменная окружения
 } elseif (isset($config["attempts"])) {
-    $attempts = $config["attempts"];
+    $attempts = (int) $config["attempts"]; // значение по умолчанию
 } else {
     $attempts = 5;
 }
 
 // таймаут
-if (isset($inputOptions["timeout"])) {
-    $timeout = (int)$inputOptions["timeout"];
+if (isset($inputOptions["timeout"]) && trim((string) $inputOptions["timeout"]) !== "") {
+    $timeout = (int) $inputOptions["timeout"]; // входная переменная
+} elseif (isset($_ENV["TIMEOUT"]) && trim((string) $_ENV["TIMEOUT"]) !== "") {
+    $timeout = (int) $_ENV["TIMEOUT"]; // переменная окружения
 } elseif (isset($config["timeout"])) {
-    $timeout = $config["timeout"];
+    $timeout = (int) $config["timeout"]; // значение по умолчанию
 } else {
     $timeout = 5;
 }
 
-if (isset($inputOptions["parser"])) {
-    $parser = $inputOptions["parser"];
-} elseif (isset($config["parser"])) {
-    $parser = $config["parser"];
-} else {
-    $parser = null;
-}
-
 // стартовые ссылки для парсинга
-if (isset($inputOptions["start-urls"])) {
-    $startURLsRaw = $inputOptions["start-urls"];
-    $startURLs = explode(',', $startURLsRaw);
+$startURLs = [];
+
+if (isset($inputOptions["start-urls"]) && trim((string) $inputOptions["start-urls"]) !== "") {
+    $startURLsRaw = $inputOptions["start-urls"]; // входная переменная
+    $startURLs = explode(',', (string) $startURLsRaw);
+    $startURLs = array_map('trim', $startURLs);
+    $startURLs = array_filter($startURLs, function (string $url): bool {
+        return $url !== '';
+    });
+    $startURLs = array_values($startURLs);
+} elseif (isset($_ENV["START_URLS"]) && trim((string) $_ENV["START_URLS"]) !== "") {
+    $startURLsRaw = $_ENV["START_URLS"]; // переменная окружения
+    $startURLs = explode(',', (string) $startURLsRaw);
     $startURLs = array_map('trim', $startURLs);
     $startURLs = array_filter($startURLs, function (string $url): bool {
         return $url !== '';
     });
     $startURLs = array_values($startURLs);
 } elseif (isset($config["startURLs"]) && is_array($config["startURLs"])) {
-    $startURLs = $config["startURLs"];
-} else {
-    $startURLs = [];
+    $startURLs = $config["startURLs"]; // значение по умолчанию
 }
 
-// прокси сервера (через запятую, в формате ip:port:login:password)
-if (cliOptionPassed($argv, "proxy")) {
+// прокси сервера
+$proxy = [];
+
+if (Text::cliOptionPassed($argv, "proxy")) {
     $proxyRaw = $inputOptions["proxy"] ?? "";
 
-    if ($proxyRaw === false || trim((string)$proxyRaw) === "") {
-        $proxy = [];
-    } else {
-        $proxy = explode(',', (string)$proxyRaw);
+    if ($proxyRaw !== false && trim((string) $proxyRaw) !== "") {
+        $proxy = explode(',', (string) $proxyRaw);
+        $proxy = array_map('trim', $proxy);
+        $proxy = array_filter($proxy, function (string $url): bool {
+            return $url !== '';
+        });
+        $proxy = array_values($proxy);
+    }
+} elseif (isset($_ENV["PROXY"]) && trim((string) $_ENV["PROXY"]) !== "") {
+    $proxyRaw = $_ENV["PROXY"]; // переменная окружения
+
+    // преобразуем входную строку в массив
+    if ($proxyRaw !== false && trim((string) $proxyRaw) !== "") {
+        $proxy = explode(";", trim((string) $proxyRaw, ';'));
         $proxy = array_map('trim', $proxy);
         $proxy = array_filter($proxy, function (string $url): bool {
             return $url !== '';
@@ -115,9 +129,7 @@ if (cliOptionPassed($argv, "proxy")) {
         $proxy = array_values($proxy);
     }
 } elseif (isset($config["proxy"]) && is_array($config["proxy"])) {
-    $proxy = $config["proxy"];
-} else {
-    $proxy = [];
+    $proxy = $config["proxy"]; // значение по умолчанию
 }
 
 $proxy = array_map(function (string $item) {
@@ -132,17 +144,19 @@ switch ($parser) {
         $taskParser = new ReshakTaskParser();
         break;
     default:
-        $bookParser = null;
-        $taskListParser = null;
-        $taskParser = null;
-        break;
+        throw new RuntimeException(
+            "Parser '{$parser}' isn't supported. Available parsers: reshak."
+        );
 }
 
 /*
-    Пример консольной команды с параметрами:
-    php index.php --start-urls="https://reshak.ru/tag/4klass.html" --proxy="96.62.194.189:6391:mkubsocc:zt8bk98vbqn9,31.98.15.181:5358:mkubsocc:zt8bk98vbqn9" --attempts=5 --timeout=5 --logs
+    Пример консольной команды:
+    php index.php --start-urls="https://reshak.ru/tag/4klass.html" --proxy="96.62.194.189:6391:user:pass,31.98.15.181:5358:user:pass" --attempts=5 --timeout=5 --logs
 
-    Пример консольной команды с параметрами из config.php:
+    Пример команды с параметрами из .env:
+    php index.php --logs
+
+    Пример команды с параметрами из config.php:
     php index.php
 */
 
@@ -155,7 +169,7 @@ $GDZParser = new GDZParser(
         proxy: $proxy,
         attempts: $attempts,
         timeout: $timeout,
-        parseOutputFolder: $outputFolder,
+        parseOutputFolder: Text::resolvePath(__DIR__, $outputFolder),
         showLogs: $showLogs
     )
 );

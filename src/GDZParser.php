@@ -50,15 +50,15 @@ class GDZParser
 
 	/**
 	 * Получить рандомный прокси-сервер из конфига
-	 * @return Proxy|null
+	 * @return ?Proxy
 	 */
-	private function getRandomProxy(): Proxy|null
+	private function getRandomProxy(): ?Proxy
 	{
-		if (count($this->config->proxy) == 0) {
+		if (count($this->config->proxy) === 0) {
 			return null;
-		} else {
-			return $this->config->proxy[array_rand($this->config->proxy)];
 		}
+
+		return $this->config->proxy[array_rand($this->config->proxy)];
 	}
 
 	/**
@@ -88,7 +88,7 @@ class GDZParser
 
 		// счетчики
 		$totalBooksCount = 0;
-		$successstartURLsCount = 0;
+		$successStartURLsCount = 0;
 		$skippedStartURLsCount = 0;
 		$startURLsProgress = 0;
 
@@ -100,7 +100,7 @@ class GDZParser
 		}
 
 		// проверка на наличие входных URL
-		if (count($this->config->startURLs) == 0) {
+		if (count($this->config->startURLs) === 0) {
 			// [OUTPUT] выводим сообщение об ошибке
 			$this->cli->error("Start URLs must not be empty!");
 			return;
@@ -145,7 +145,11 @@ class GDZParser
 		if ($this->config->showLogs) $this->cli->output("Checking output folder...");
 		if (!is_dir($this->config->parseOutputFolder)) {
 			if ($this->config->showLogs) $this->cli->output("Folder <yellow>{$this->config->parseOutputFolder}</yellow> not found. Creating...");
-			mkdir($this->config->parseOutputFolder, 0777, true);
+
+			if (!mkdir($this->config->parseOutputFolder, 0777, true) && !is_dir($this->config->parseOutputFolder)) {
+				$this->cli->error("Failed to create folder: {$this->config->parseOutputFolder}");
+				return;
+			}
 		} else {
 			if ($this->config->showLogs) $this->cli->output("Folder <yellow>{$this->config->parseOutputFolder}</yellow> found.");
 		}
@@ -232,25 +236,31 @@ class GDZParser
 						}
 
 						// выводим информацию о найденных книгах
-						if ($booksCount == 0) {
+						if ($booksCount === 0) {
 							if ($this->config->showLogs) $this->cli->output('<red>No books found.</red>');
 						} else {
 							if ($this->config->showLogs) $this->cli->output("<bold><green>Found {$booksCount} books.</green></bold>");
 
 							// [OUTPUT] Создаем папку с соответствующей входной ссылкой, куда будет размещены будущие папки и файлы с книгами и задачами
 							if ($this->config->showLogs) $this->cli->output("Creating folder <yellow>{$outputStartURLFolderPath}</yellow>...");
-							mkdir($outputStartURLFolderPath, 0777, true);
+
+							if (!mkdir($outputStartURLFolderPath, 0777, true) && !is_dir($outputStartURLFolderPath)) {
+								$this->cli->error("Failed to create folder: {$outputStartURLFolderPath}");
+								return;
+							}
+
+							$booksFilePath = $outputStartURLFolderPath . DIRECTORY_SEPARATOR . "books.json";
 
 							// [OUTPUT] Сохраняем информацию о книгах в JSON-файл внутрь папки
-							if ($this->config->showLogs) $this->cli->output("Saving books info to <yellow>{$outputStartURLFolderPath}\\books.json...</yellow>");
+							if ($this->config->showLogs) $this->cli->output("Saving books info to <yellow>{$booksFilePath}</yellow>...");
 
-							$saveStatus = file_put_contents($outputStartURLFolderPath . '\\books.json', json_encode(
+							$saveStatus = file_put_contents($booksFilePath, json_encode(
 								$books,
 								JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 							));
 
 							if ($saveStatus === false) {
-								if ($this->config->showLogs) $this->cli->output("<red>Failed to save books info to <yellow>{$outputStartURLFolderPath}\\books.json...</yellow></red>");
+								if ($this->config->showLogs) $this->cli->output("<red>Failed to save books info to <yellow>{$booksFilePath}</yellow></red>");
 							}
 						}
 
@@ -275,7 +285,7 @@ class GDZParser
 			}
 
 			if ($startURLParsedSuccessfully) {
-				$successstartURLsCount++;
+				$successStartURLsCount++;
 			}
 
 			// обновляем счетчик прогресса
@@ -296,7 +306,7 @@ class GDZParser
 			$this->cli->br();
 			$this->cli->output('<bold><green>Finished parsing books.</green></bold>');
 			$this->cli->output("<bold><cyan>Total books count:</cyan></bold> {$totalBooksCount}");
-			$this->cli->output("<bold><green>Success parsed start URLs count:</green></bold> {$successstartURLsCount}");
+			$this->cli->output("<bold><green>Success parsed start URLs count:</green></bold> {$successStartURLsCount}");
 			$this->cli->output("<bold><yellow>Skipped start URLs count:</yellow></bold> {$skippedStartURLsCount}");
 			$this->cli->br();
 		}
@@ -331,13 +341,14 @@ class GDZParser
 			$taskListParsedSuccessfully = false;
 
 			// [OUTPUT] Проверяем папку на существование
-			if (is_dir($bookFolderPath) && file_exists($bookFolderPath . '\\taskList.json')) {
+			$taskListFilePath = $bookFolderPath . DIRECTORY_SEPARATOR . "taskList.json";
+			if (is_dir($bookFolderPath) && file_exists($taskListFilePath)) {
 				if ($this->config->showLogs) $this->cli->output("<dim>[{$currentTaskListProgress} / {$totalBooksCount}]</dim> <dim>[{$tasksItemsProgressPercent}%]</dim> Task list for book <yellow>{$bookItem['book']->title}</yellow> already parsed. Skipping...");
 
 				$skippedTasksListCount++;
 
 				// [OUTPUT] восстанавливаем список задач
-				$storedTasks = json_decode(file_get_contents($bookFolderPath . '\\taskList.json'), true);
+				$storedTasks = json_decode(file_get_contents($taskListFilePath), true);
 
 				if (is_array($storedTasks)) {
 					$totalTasksCount += count($storedTasks);
@@ -372,7 +383,7 @@ class GDZParser
 						}
 
 						// выводим информацию о найденных списках задач
-						if ($tasksItemsCount == 0) {
+						if ($tasksItemsCount === 0) {
 							if ($this->config->showLogs) $this->cli->output('<red>No task items list found.</red>');
 						} else {
 							if ($this->config->showLogs) $this->cli->output("<bold><green>Found {$tasksItemsCount} task items lists.</green></bold>");
@@ -380,19 +391,23 @@ class GDZParser
 							// [OUTPUT] Создаем папку
 							if (!is_dir($bookFolderPath)) {
 								if ($this->config->showLogs) $this->cli->output("Folder <yellow>{$bookFolderPath}</yellow> not found. Creating...");
-								mkdir($bookFolderPath, 0777, true);
+
+								if (!mkdir($bookFolderPath, 0777, true) && !is_dir($bookFolderPath)) {
+									$this->cli->error("Failed to create folder: {$bookFolderPath}");
+									return;
+								}
 							}
 
 							// [OUTPUT] Сохраняем информацию о списке задач в JSON-файл внутрь папки книги
-							if ($this->config->showLogs) $this->cli->output("Saving task items lists to <yellow>{$bookFolderPath}\\taskList.json...</yellow>");
+							if ($this->config->showLogs) $this->cli->output("Saving task items lists to <yellow>{$taskListFilePath}</yellow>...");
 
-							$saveStatus = file_put_contents($bookFolderPath . '\\taskList.json', json_encode(
+							$saveStatus = file_put_contents($taskListFilePath, json_encode(
 								$tasksItems,
 								JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 							));
 
-							if (!$saveStatus === false) {
-								if ($this->config->showLogs) $this->cli->output("<red>Failed to save task items lists to <yellow>{$bookFolderPath}\\taskList.json!</red>");
+							if ($saveStatus === false) {
+								if ($this->config->showLogs) $this->cli->output("<red>Failed to save task items lists to <yellow>{$taskListFilePath}</yellow></red>");
 							}
 						}
 
@@ -475,7 +490,7 @@ class GDZParser
 			$outputTaskFileName = trim($outputTaskFileName, "_");
 			$outputTaskFileName .= ".json";
 
-			//гарантируем безопасную длину названия файла
+			// гарантируем безопасную длину названия файла
 			$outputTaskFileName = Text::makeSafeJSONFileName($outputTaskFileName);
 
 			// директория, где будет находиться задача, совпадает с директорией списка задач, т.к. это конечный элемент

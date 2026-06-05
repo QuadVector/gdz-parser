@@ -188,7 +188,56 @@ final class Text
 			$md5Name = md5($name);
 			$name = mb_substr($name, 0, $maxLength - $extensionLength - mb_strlen($md5Name) - 1) . "_" . $md5Name . ".json"; // -1 для доп. символа подчеркивания
 		}
-		
+
 		return $name;
+	}
+
+	/**
+	 * Введен ли входной параметр в консоли
+	 * @param array $argv Массив с входными параметрами CLI
+	 * @param string $optionName Название параметра
+	 * @return bool
+	 */
+	public static function cliOptionPassed(array $argv, string $optionName): bool
+	{
+		$option = '--' . $optionName;
+
+		foreach ($argv as $arg) {
+			if ($arg === $option) {
+				return true;
+			}
+
+			if (str_starts_with($arg, $option . '=')) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Преобразует путь в абсолютный.
+	 * Если путь уже абсолютный — возвращает как есть.
+	 * Если путь относительный — делает его относительным к директории проекта.
+	 *
+	 * @param string $dir Текущая директория
+	 * @param string $path Путь
+	 * @return string
+	 */
+	public static function resolvePath(string $dir, string $path): string
+	{
+		$path = trim($path);
+
+		// Unix absolute path: /var/www/input
+		if (str_starts_with($path, '/')) {
+			return $path;
+		}
+
+		// Windows absolute path: C:\input или C:/input
+		if (preg_match('/^[A-Za-z]:[\/\\\\]/', $path) === 1) {
+			return $path;
+		}
+
+		return $dir . DIRECTORY_SEPARATOR . $path;
 	}
 }
