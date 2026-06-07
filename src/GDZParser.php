@@ -458,6 +458,11 @@ class GDZParser
 			$this->cli->br();
 		}
 
+		if ($totalTasksCount === 0) {
+			$this->cli->error("No tasks found!");
+			return;
+		}
+
 		// начинаем парсить каждую задачу
 		if ($this->config->showLogs) $this->cli->output("<bold><green>Start parsing tasks...</green></bold>");
 
