@@ -7,6 +7,7 @@ use QuadVector\GDZParser\ValueObject\Proxy;
 use QuadVector\GDZParser\Exception\AccessDeniedException;
 use QuadVector\GDZParser\Exception\EncodeException;
 use QuadVector\GDZParser\Exception\DecodeException;
+use GdImage;
 use \InvalidArgumentException;
 
 class Base64Image
@@ -17,6 +18,9 @@ class Base64Image
 	/**
 	 * Конструктор
 	 * @param string $base64 Закодированное изображение в base64
+	 * 
+	 * @throws InvalidArgumentException
+	 * @throws DecodeException
 	 */
 	public function __construct(string $base64)
 	{
@@ -36,7 +40,7 @@ class Base64Image
 		}
 
 		// проверяем base64 на корректность изображения
-		$imageInfo = @getimagesizefromstring($binary);
+		$imageInfo = @getimagesizefromString($binary);
 		if ($imageInfo === false) {
 			throw new DecodeException('Decoded data is not a valid image.');
 		}
@@ -45,7 +49,7 @@ class Base64Image
 		$allowedMime = [
 			'image/png',
 			'image/jpeg',
-			'image/webp',
+			'image/webp'
 		];
 
 		if (!in_array($this->mime, $allowedMime, true)) {
@@ -53,6 +57,20 @@ class Base64Image
 		}
 
 		$this->base64 = $base64;
+	}
+
+	/**
+	 * Получить изображение в base64 из файла
+	 * @param mixed $path
+	 * @return Base64Image
+	 */
+	public static function fromFile($path): self
+	{
+		if (file_exists($path) === false) {
+			throw new InvalidArgumentException("File not found: {$path}");
+		}
+
+		return new self(base64_encode(file_get_contents($path)));
 	}
 
 	/**
@@ -92,6 +110,19 @@ class Base64Image
 	}
 
 	/**
+	 * Получить изображение в base64 из GdImage
+	 * @param GdImage $image Входной ресурс изображения
+	 * @return Base64Image
+	 */
+	public static function fromGdImage(GdImage $image)
+	{
+		ob_start();
+		imagepng($image);
+		$base64 = base64_encode(ob_get_clean());
+		return new self($base64);
+	}
+
+	/**
 	 * Сохранить файл
 	 * @param string $path Путь сохранения
 	 * @return void
@@ -120,11 +151,38 @@ class Base64Image
 	}
 
 	/**
+	 * Получить MD5-хеш изображения
+	 * @return string
+	 */
+	public function getMD5(): string
+	{
+		return md5($this->base64);
+	}
+
+	/**
 	 * Получить Mime-type текущего изображения
 	 * @return string
 	 */
 	public function getMime(): string
 	{
 		return $this->mime;
+	}
+
+	/**
+	 * Получить бинарное содержимое изображения
+	 * @return string
+	 */
+	public function getBinary(): string
+	{
+		return base64_decode($this->base64);
+	}
+
+	/**
+	 * Получить ресурс изображения в виде GdImage
+	 * @return GdImage
+	 */
+	public function getGdResource(): GdImage
+	{
+		return imagecreatefromstring($this->getBinary());
 	}
 }
