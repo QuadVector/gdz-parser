@@ -28,14 +28,10 @@ final class CURL
 				CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
 					. 'AppleWebKit/537.36 (KHTML, like Gecko) '
 					. 'Chrome/124.0.0.0 Safari/537.36',
-				CURLOPT_HTTPHEADER     => [
-					'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+				CURLOPT_HTTPHEADER => [
+					'Accept: application/json',
 					'Accept-Language: ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-					'Accept-Encoding: gzip, deflate, br',
-					'Connection: keep-alive',
-					'Upgrade-Insecure-Requests: 1',
 				],
-				// ↓ ключевое для скорости
 				CURLOPT_TCP_KEEPALIVE  => 1,
 				CURLOPT_TCP_KEEPIDLE   => 60,
 				CURLOPT_TCP_KEEPINTVL  => 30,
@@ -65,7 +61,7 @@ final class CURL
 			return false;
 		}
 
-		$httpCode = (int)curl_getinfo(self::$ch, CURLINFO_HTTP_CODE);
+		$httpCode = (int) curl_getinfo(self::$ch, CURLINFO_HTTP_CODE);
 
 		// HTTP-ошибки: 400, 403, 404, 500 и т.д.
 		if ($httpCode >= 400 || $httpCode === 0) {
@@ -76,7 +72,6 @@ final class CURL
 
 		return $data;
 	}
-
 
 	/**
 	 * Получить изображение по URL
@@ -98,7 +93,7 @@ final class CURL
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 		curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
 		curl_setopt($ch, CURLOPT_TIMEOUT, $timeout ?? 30);
-		curl_setopt($ch, CURLOPT_ENCODING, '');
+		curl_setopt($ch, CURLOPT_ENCODING, 'gzip, deflate');
 
 		curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
 			. 'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -128,7 +123,7 @@ final class CURL
 			return false;
 		}
 
-		$httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		$httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
 		// HTTP-ошибки: 400, 403, 404, 500 и т.д.
 		if ($httpCode >= 400 || $httpCode === 0) {
