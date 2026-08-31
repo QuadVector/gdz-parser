@@ -2,59 +2,98 @@
 
 namespace QuadVector\GDZParser;
 
+use InvalidArgumentException;
 use QuadVector\GDZParser\BookParser\BookParserInterface;
 use QuadVector\GDZParser\TaskListParser\TaskListParserInterface;
 use QuadVector\GDZParser\TaskParser\TaskParserInterface;
-use QuadVector\GDZParser\ValueObject\Proxy;
-use InvalidArgumentException;
 
 final class GDZParserConfig
 {
-	/**
-	 * @param ?BookParserInterface $bookParser Контекст парсера книг
-	 * @param ?TaskListParserInterface $taskListParser Контекст парсера списка заданий
-	 * @param ?TaskParserInterface $taskParser Контекст парсера заданий
-	 * @param Proxy[] $proxy Список прокси-серверов
-	 * @param string[] $startURLs Начальные URL, где находятся книги
-	 * @param int $attempts Количество попыток парсинга
-	 * @param int $timeout Таймаут на выполнение одного CURL-запроса
-	 * @param string $parseOutputFolder Папка, в которую сохранять результаты парсинга
-	 * @param bool $showLogs Выводить в консоли дополнительную информацию
-	 * @throws InvalidArgumentException
-	 */
+	private const AVAILABLE_MODES = [
+		'books',
+		'tasks',
+		'all',
+	];
+
+	public string $mode;
+
+	public bool $parseImages;
+
 	public function __construct(
-		public readonly ?BookParserInterface $bookParser = null,
-		public readonly ?TaskListParserInterface $taskListParser = null,
-		public readonly ?TaskParserInterface $taskParser = null,
-		public readonly array $proxy = [],
-		public readonly array $startURLs = [],
-		public readonly int $attempts = 5,
-		public readonly int $timeout = 5,
-		public readonly ?string $parseOutputFolder = null,
-		public readonly bool $showLogs = false
+		public BookParserInterface $bookParser,
+		public TaskListParserInterface $taskListParser,
+		public TaskParserInterface $taskParser,
+		public array $startURLs = [],
+		public array $proxy = [],
+		public int $attempts = 5,
+		public int $timeout = 5,
+		public string $parseOutputFolder = 'output',
+		public bool $showLogs = false,
+		string $mode = 'all',
+		bool $parseImages = true
 	) {
-		foreach ($this->proxy as $proxy) {
-			if (!$proxy instanceof Proxy) {
-				throw new InvalidArgumentException('All proxy must be instances of Proxy class.');
-			}
+		$mode = strtolower(
+			trim($mode)
+		);
+
+		if (
+			!in_array(
+				$mode,
+				self::AVAILABLE_MODES,
+				true
+			)
+		) {
+			throw new InvalidArgumentException(
+				"Unsupported parser mode '{$mode}'. "
+					. "Available modes: "
+					. implode(
+						', ',
+						self::AVAILABLE_MODES
+					)
+			);
 		}
 
-		foreach ($this->startURLs as $startURL) {
-			if (!is_string($startURL) || trim($startURL) === '') {
-				throw new InvalidArgumentException('All start URLs must be non-empty strings.');
-			}
-		}
+		$this->mode = $mode;
+		$this->parseImages = $parseImages;
+	}
 
-		if ($this->attempts < 1) {
-			throw new InvalidArgumentException('Attempts must be greater than or equal to 1.');
-		}
+	/**
+	 * Нужно ли заходить глубже предметов.
+	 */
+	public function shouldParseBooks(): bool
+	{
+		return in_array(
+			$this->mode,
+			[
+				'books',
+				'tasks',
+				'all',
+			],
+			true
+		);
+	}
 
-		if ($this->timeout < 1) {
-			throw new InvalidArgumentException('Timeout must be greater than or equal to 1.');
-		}
+	/**
+	 * Нужно ли получать списки задач книг.
+	 */
+	public function shouldParseTaskLists(): bool
+	{
+		return in_array(
+			$this->mode,
+			[
+				'tasks',
+				'all',
+			],
+			true
+		);
+	}
 
-		if (trim($this->parseOutputFolder) === '') {
-			throw new InvalidArgumentException('Need to set output folder.');
-		}
+	/**
+	 * Нужно ли открывать каждую задачу
+	 * и получать её содержимое.
+	 */
+	public function shouldParseTaskContents(): bool
+	{
+		return $this->mode === 'all';
 	}
 }

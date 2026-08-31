@@ -5,27 +5,79 @@ namespace QuadVector\GDZParser\Helper;
 final class Text
 {
 	/**
-	 * Очистить текст от лишних символов
-	 * @param string $text исходный текст
-	 * @return string
+	 * Очистить текст от лишних символов.
 	 */
-	public static function cleanupText(string $text): string
-	{
-		$text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-		$text = preg_replace('/\x{00A0}/u', ' ', $text);
-		$text = preg_replace('/\s+/u', ' ', $text);
+	public static function cleanupText(
+		string $text
+	): string {
+		if ($text === '') {
+			return '';
+		}
 
-		return trim($text);
+		/*
+         * На всякий случай удаляем UTF-8 BOM,
+         * если он попал непосредственно в текст.
+         */
+		$text = preg_replace(
+			'/^\xEF\xBB\xBF/',
+			'',
+			$text
+		);
+
+		$text = html_entity_decode(
+			$text,
+			ENT_QUOTES | ENT_HTML5,
+			'UTF-8'
+		);
+
+		/*
+         * NBSP -> обычный пробел.
+         */
+		$text = preg_replace(
+			'/\x{00A0}/u',
+			' ',
+			$text
+		);
+
+		/*
+         * Узкий неразрывный пробел.
+         */
+		$text = preg_replace(
+			'/\x{202F}/u',
+			' ',
+			$text
+		);
+
+		/*
+         * Переносы, табы и повторные пробелы
+         * превращаем в один пробел.
+         */
+		$text = preg_replace(
+			'/\s+/u',
+			' ',
+			$text
+		);
+
+		return trim(
+			(string)$text
+		);
 	}
 
 	/**
-	 * Сгенерировать ЧПУ транслит текста
-	 * @param string $value Исходный текст
-	 * @return string
+	 * Сгенерировать ЧПУ-транслит текста.
 	 */
-	public static function translitRef(string $value): string
-	{
-		$converter = array(
+	public static function translitRef(
+		string $value
+	): string {
+		$value = self::cleanupText(
+			$value
+		);
+
+		if ($value === '') {
+			return 'default';
+		}
+
+		$converter = [
 			'а' => 'a',
 			'б' => 'b',
 			'в' => 'v',
@@ -59,155 +111,357 @@ final class Text
 			'э' => 'e',
 			'ю' => 'yu',
 			'я' => 'ya',
+		];
+
+		$value = mb_strtolower(
+			$value,
+			'UTF-8'
 		);
 
-		$value = mb_strtolower($value);
-		$value = strtr($value, $converter);
-		$value = mb_ereg_replace('[^-0-9a-z]', '-', $value);
-		$value = mb_ereg_replace('[-]+', '-', $value);
-		$value = trim($value, '-');
+		$value = strtr(
+			$value,
+			$converter
+		);
 
-		return $value;
+		/*
+         * Все неподходящие символы заменяем "-".
+         */
+		$value = preg_replace(
+			'/[^a-z0-9]+/u',
+			'-',
+			$value
+		);
+
+		/*
+         * Убираем повторные "-".
+         */
+		$value = preg_replace(
+			'/-+/',
+			'-',
+			(string)$value
+		);
+
+		$value = trim(
+			(string)$value,
+			'-'
+		);
+
+		return $value !== ''
+			? $value
+			: 'default';
 	}
 
 	/**
-	 * Сгенерировать название на основе ссылки
-	 * @param string $url
-	 * @return string
+	 * Сгенерировать название на основе ссылки.
 	 */
-	public static function generateNamefromURL(string $url): string
-	{
-		$url = trim($url);
+	public static function generateNamefromURL(
+		string $url
+	): string {
+		$url = trim(
+			$url
+		);
 
 		if ($url === '') {
 			return 'default';
 		}
 
-		$parts = parse_url($url);
+		$parts = parse_url(
+			$url
+		);
 
-		$host = $parts['host'] ?? '';
-		$path = $parts['path'] ?? '';
-		$query = $parts['query'] ?? '';
-
-		// Если URL без схемы, parse_url может положить всё в path
-		if ($host === '' && $path !== '') {
-			$prepared = parse_url('http://' . ltrim($url, '/'));
-
-			$host = $prepared['host'] ?? '';
-			$path = $prepared['path'] ?? '';
-			$query = $prepared['query'] ?? '';
+		if (!is_array($parts)) {
+			return 'default';
 		}
 
-		$path = trim($path, '/');
+		$host =
+			$parts['host'] ?? '';
+
+		$path =
+			$parts['path'] ?? '';
+
+		$query =
+			$parts['query'] ?? '';
+
+		/*
+         * Если URL без схемы, parse_url()
+         * может положить всё в path.
+         */
+		if (
+			$host === ''
+			&& $path !== ''
+		) {
+			$prepared = parse_url(
+				'http://'
+					. ltrim($url, '/')
+			);
+
+			if (is_array($prepared)) {
+				$host =
+					$prepared['host'] ?? '';
+
+				$path =
+					$prepared['path'] ?? '';
+
+				$query =
+					$prepared['query'] ?? '';
+			}
+		}
+
+		$path = trim(
+			$path,
+			'/'
+		);
 
 		if ($path !== '') {
-			$segments = explode('/', $path);
-			$lastIndex = count($segments) - 1;
+			$segments = explode(
+				'/',
+				$path
+			);
 
-			// Удаляем расширение у последнего сегмента
-			$segments[$lastIndex] = pathinfo($segments[$lastIndex], PATHINFO_FILENAME);
+			$lastIndex =
+				count($segments) - 1;
 
-			// Убираем пустые сегменты после обработки
-			$segments = array_filter($segments, static fn($segment) => $segment !== '');
+			if (
+				$lastIndex >= 0
+				&& isset($segments[$lastIndex])
+			) {
+				$segments[$lastIndex] =
+					pathinfo(
+						$segments[$lastIndex],
+						PATHINFO_FILENAME
+					);
+			}
 
-			$path = implode('/', $segments);
+			$segments = array_filter(
+				$segments,
+				static fn($segment): bool =>
+				$segment !== ''
+			);
+
+			$path = implode(
+				'/',
+				$segments
+			);
 		}
 
-		$result = trim($host . ($path !== '' ? '/' . $path : ''), '/');
+		$result = trim(
+			$host
+				. (
+					$path !== ''
+					? '/' . $path
+					: ''
+				),
+			'/'
+		);
 
-		// Добавляем GET-параметры
+		/*
+         * Добавляем GET-параметры.
+         */
 		if ($query !== '') {
-			$query = urldecode($query);
-
-			// Для читаемости заменяем разделители query-строки
-			$query = str_replace(
-				['&', '='],
-				['_', '-'],
+			$query = urldecode(
 				$query
 			);
 
-			$result .= '_' . $query;
+			$query = str_replace(
+				[
+					'&',
+					'=',
+				],
+				[
+					'_',
+					'-',
+				],
+				$query
+			);
+
+			$result .=
+				'_'
+				. $query;
 		}
 
-		// Заменяем все неподходящие символы на "_"
-		$result = preg_replace('/[^a-zA-Z0-9._-]+/', '_', $result);
+		/*
+         * Всё неподходящее заменяем "_".
+         */
+		$result = preg_replace(
+			'/[^a-zA-Z0-9._-]+/',
+			'_',
+			$result
+		);
 
-		// Убираем повторяющиеся "_"
-		$result = preg_replace('/_+/', '_', $result);
+		$result = preg_replace(
+			'/_+/',
+			'_',
+			(string)$result
+		);
 
-		$result = trim($result, '._-');
-		$result = mb_substr($result, 0, 100);
+		$result = trim(
+			(string)$result,
+			'._-'
+		);
 
-		return $result !== '' ? $result : 'default';
+		/*
+         * Не позволяем этому идентификатору
+         * разрастаться бесконечно.
+         */
+		$result = mb_substr(
+			$result,
+			0,
+			100,
+			'UTF-8'
+		);
+
+		return $result !== ''
+			? $result
+			: 'default';
 	}
 
-
 	/**
-	 * Сделать относительную ссылку абсолютной
-	 * @param string $domain Исходный домен (без протокола и слэша в конце)
-	 * @param string $href Относительная ссылка
-	 * @return string
+	 * Сделать относительную ссылку абсолютной.
 	 */
-	public static function makeAbsoluteURL(string $domain, string $href): string
-	{
-		$domain = trim($domain);
-		$href = trim($href);
+	public static function makeAbsoluteURL(
+		string $domain,
+		string $href
+	): string {
+		$domain = trim(
+			$domain
+		);
+
+		$href = trim(
+			$href
+		);
 
 		if ($href === '') {
 			return '';
 		}
 
-		// Уже абсолютная ссылка
-		if (preg_match('#^[a-z][a-z0-9+.-]*://#i', $href)) {
+		/*
+         * Уже абсолютная ссылка.
+         */
+		if (
+			preg_match(
+				'#^[a-z][a-z0-9+.-]*://#i',
+				$href
+			)
+		) {
 			return $href;
 		}
 
-		// Protocol-relative ссылка
-		if (strpos($href, '//') === 0) {
-			return 'https:' . $href;
+		/*
+         * Protocol-relative:
+         *
+         * //example.com/image.jpg
+         */
+		if (
+			str_starts_with(
+				$href,
+				'//'
+			)
+		) {
+			return 'https:'
+				. $href;
 		}
 
-		return 'https://' . rtrim($domain, '/') . '/' . ltrim($href, '/');
+		return 'https://'
+			. rtrim(
+				$domain,
+				'/'
+			)
+			. '/'
+			. ltrim(
+				$href,
+				'/'
+			);
 	}
 
 	/**
-	 * Преобразовать имя json-файла таким образом, чтобы
-	 * оно всегда соответствовало максимальной длине (255 символов)
-	 * @param string $name Исходное имя файла (с расширением)
-	 * @return string
+	 * Преобразовать имя JSON-файла так,
+	 * чтобы оно не превышало максимальную длину.
 	 */
-	public static function makeSafeJSONFileName(string $name): string
-	{
-		$extensionLength = mb_strlen(".json"); // 5 символов для расширения и точки (.json)
+	public static function makeSafeJSONFileName(
+		string $name
+	): string {
+		$extension = '.json';
+
 		$maxLength = 255;
-		$strLen = mb_strlen($name);
 
-		// если слишком длинный текст, генерируем новое уникальное имя, т.к. оно необходимо
-		// для уникальности имени при парсинге
-		if ($strLen > $maxLength) {
-			$md5Name = md5($name);
-			$name = mb_substr($name, 0, $maxLength - $extensionLength - mb_strlen($md5Name) - 1) . "_" . $md5Name . ".json"; // -1 для доп. символа подчеркивания
+		/*
+         * Для имени файла правильнее считать байты,
+         * потому что файловые системы обычно ограничивают
+         * именно длину компонента пути в байтах.
+         */
+		if (strlen($name) <= $maxLength) {
+			return $name;
 		}
 
-		return $name;
+		/*
+         * Если передали имя с .json —
+         * временно убираем расширение.
+         */
+		if (
+			str_ends_with(
+				strtolower($name),
+				$extension
+			)
+		) {
+			$baseName = substr(
+				$name,
+				0,
+				-strlen($extension)
+			);
+		} else {
+			$baseName = $name;
+		}
+
+		$hash = md5(
+			$name
+		);
+
+		/*
+         * Оставляем место под:
+         *
+         * "_" + md5 + ".json"
+         */
+		$suffix =
+			'_'
+			. $hash
+			. $extension;
+
+		$availableLength =
+			$maxLength
+			- strlen($suffix);
+
+		$baseName = substr(
+			$baseName,
+			0,
+			$availableLength
+		);
+
+		return $baseName
+			. $suffix;
 	}
 
 	/**
-	 * Введен ли входной параметр в консоли
-	 * @param array $argv Массив с входными параметрами CLI
-	 * @param string $optionName Название параметра
-	 * @return bool
+	 * Был ли передан входной параметр в CLI.
 	 */
-	public static function cliOptionPassed(array $argv, string $optionName): bool
-	{
-		$option = '--' . $optionName;
+	public static function cliOptionPassed(
+		array $argv,
+		string $optionName
+	): bool {
+		$option =
+			'--'
+			. $optionName;
 
 		foreach ($argv as $arg) {
 			if ($arg === $option) {
 				return true;
 			}
 
-			if (str_starts_with($arg, $option . '=')) {
+			if (
+				str_starts_with(
+					$arg,
+					$option . '='
+				)
+			) {
 				return true;
 			}
 		}
@@ -217,27 +471,52 @@ final class Text
 
 	/**
 	 * Преобразует путь в абсолютный.
-	 * Если путь уже абсолютный — возвращает как есть.
-	 * Если путь относительный — делает его относительным к директории проекта.
-	 *
-	 * @param string $dir Текущая директория
-	 * @param string $path Путь
-	 * @return string
 	 */
-	public static function resolvePath(string $dir, string $path): string
-	{
-		$path = trim($path);
+	public static function resolvePath(
+		string $dir,
+		string $path
+	): string {
+		$path = trim(
+			$path
+		);
 
-		// Unix absolute path: /var/www/input
-		if (str_starts_with($path, '/')) {
+		/*
+         * Unix:
+         *
+         * /var/www/output
+         */
+		if (
+			str_starts_with(
+				$path,
+				'/'
+			)
+		) {
 			return $path;
 		}
 
-		// Windows absolute path: C:\input или C:/input
-		if (preg_match('/^[A-Za-z]:[\/\\\\]/', $path) === 1) {
+		/*
+         * Windows:
+         *
+         * C:\output
+         * C:/output
+         */
+		if (
+			preg_match(
+				'/^[A-Za-z]:[\/\\\\]/',
+				$path
+			) === 1
+		) {
 			return $path;
 		}
 
-		return $dir . DIRECTORY_SEPARATOR . $path;
+		return rtrim(
+			$dir,
+			'/\\'
+		)
+			. DIRECTORY_SEPARATOR
+			. ltrim(
+				$path,
+				'/\\'
+			);
 	}
 }

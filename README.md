@@ -4,7 +4,7 @@
 |---|---|
 | `composer parse` | Запуск парсера через Composer-скрипт |
 | `composer parse-debug` | Запуск парсера через Composer-скрипт с выводом логов |
-| `php index.php` | Запуск парсера с параметрами из `.env` или `src/config.php` |
+| `php index.php` | Запуск парсера с параметрами из `.env` |
 | `php index.php --logs` | Запуск парсера с выводом логов |
 | `php index.php --parser="reshak" --output="output" --start-urls="https://reshak.ru/tag/4klass.html" --attempts=5 --timeout=5 --logs` | Запуск парсера с указанием всех основных параметров через CLI |
 | `php index.php --start-urls="https://reshak.ru/tag/4klass.html" --proxy="96.62.194.189:6391:user:pass,31.98.15.181:5358:user:pass" --attempts=5 --timeout=5 --logs` | Запуск парсера со стартовой ссылкой, прокси, количеством попыток, таймаутом и логами |
@@ -22,5 +22,3 @@
 | `--attempts=5` | Указывает количество попыток запроса |
 | `--timeout=5` | Указывает таймаут запроса в секундах |
 | `--logs` | Включает вывод логов в консоль |
-
-Основную конфигурацию можно изучить в файле **src/config.php**

@@ -2,15 +2,13 @@
 
 namespace QuadVector\GDZParser\TaskListParser;
 
-use QuadVector\GDZParser\TaskListParser\TaskListParserInterface;
 use QuadVector\GDZParser\DTO\TaskListItemDTO;
 use QuadVector\GDZParser\Exception\AccessDeniedException;
 use QuadVector\GDZParser\Exception\PageNotFoundException;
 use QuadVector\GDZParser\Exception\ParseException;
 use QuadVector\GDZParser\Helper\CURL;
-use QuadVector\GDZParser\ValueObject\Proxy;
 use QuadVector\GDZParser\Helper\Text;
-
+use QuadVector\GDZParser\ValueObject\Proxy;
 use voku\helper\HtmlDomParser;
 
 class ReshakTaskListParser implements TaskListParserInterface
@@ -18,54 +16,78 @@ class ReshakTaskListParser implements TaskListParserInterface
 	const DOMAIN = 'reshak.ru';
 
 	/**
-	 * Получить список задач
-	 * @param string $url Ссылка на страницу со списком задач
+	 * Получить список задач.
+	 *
 	 * @return TaskListItemDTO[]
 	 */
-	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): array
-	{
-		// обработка относительных ссылок
-		$url = Text::makeAbsoluteURL(self::DOMAIN, $url);
+	public function parse(
+		string $url = '',
+		?Proxy $proxy = null,
+		?int $timeout = null
+	): array {
+		$url = Text::makeAbsoluteURL(
+			self::DOMAIN,
+			$url
+		);
 
-		// получаем HTML-код страницы
-		$html = CURL::fileGetContents($url, $proxy, $timeout);
+		$html = CURL::fileGetContents(
+			$url,
+			$proxy,
+			$timeout
+		);
 
 		if (!$html) {
-			throw new PageNotFoundException("Can't open {$url}.");
+			throw new PageNotFoundException(
+				"Can't open {$url}."
+			);
 		}
 
 		if ($html === 'Access Denied') {
-			throw new AccessDeniedException("Access denied for {$url}");
+			throw new AccessDeniedException(
+				"Access denied for {$url}"
+			);
 		}
 
-		// обрабатываем HTML код
 		$dom = HtmlDomParser::str_get_html($html);
-		unset($html); // чистим память
+
+		unset($html);
 
 		if (!$dom) {
-			throw new ParseException("Can't parse {$url}.");
+			throw new ParseException(
+				"Can't parse {$url}."
+			);
 		}
 
-		// получаем контейнер со списком задач
-		$article = $dom->findOneOrFalse('article.lcol');
+		$article = $dom->findOneOrFalse(
+			'article.lcol'
+		);
+
 		if (!$article) {
-			unset($dom); // чистим память
+			unset($dom);
 
-			throw new ParseException("Can't find article.lcol on {$url}.");
+			throw new ParseException(
+				"Can't find article.lcol on {$url}."
+			);
 		}
 
-		$result = [];
+		/*
+         * Сначала пробуем старый формат.
+         */
+		$result = $this->parseOldFormat(
+			$article
+		);
 
-		// ===== Вариант 1: старый формат (subtitle + razdel) =====
-		$result = $this->parseOldFormat($article);
-
-		// ===== Вариант 2: новый формат (slide-menu-index с sublnk + submenu) =====
+		/*
+         * Если ничего нет — новый формат.
+         */
 		if (empty($result)) {
-			$result = $this->parseNewFormat($article);
+			$result = $this->parseNewFormat(
+				$article
+			);
 		}
 
-		// чистим память
 		unset($article, $dom);
+
 		if (function_exists('gc_collect_cycles')) {
 			gc_collect_cycles();
 		}
@@ -74,14 +96,13 @@ class ReshakTaskListParser implements TaskListParserInterface
 	}
 
 	/**
-	 * Парсинг старого формата: subtitle + razdel
-	 * @param object $article Объект Simple PHP DOM
-	 * @return TaskListItemDTO[]
-	 */
-	/**
-	 * Парсинг старого формата: subtitle + razdel
-	 * @param object $article Объект Simple PHP DOM
-	 * @return TaskListItemDTO[]
+	 * Старый формат:
+	 *
+	 * subtitle
+	 * razdel
+	 * razdel
+	 * subtitle
+	 * razdel
 	 */
 	private function parseOldFormat(object $article): array
 	{
@@ -89,137 +110,275 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 		$currentChapter = null;
 
-		// Родительская глава для ситуации:
-		// <div class="subtitle">Задачи для подготовки к ЕГЭ.</div>
-		// <div class="subtitle">Задание 3.</div>
+		/*
+         * Родительская глава.
+         *
+         * Например:
+         *
+         * Часть 1
+         * Глава 1
+         *
+         * => Часть 1 Глава 1
+         */
 		$parentChapter = null;
 
-		// Последний "чистый" subtitle без родителя.
-		// Нужен, чтобы при двух subtitle подряд сделать первый родителем.
+		/*
+         * Последний subtitle.
+         */
 		$lastSubtitleTitle = null;
 
-		// Флаг: предыдущий значимый элемент был subtitle
+		/*
+         * Предыдущий значимый элемент был subtitle.
+         */
 		$lastElementWasSubtitle = false;
 
-		foreach ($article->children() as $child) {
-			$classAttr = (string)($child->getAttribute('class') ?? '');
-			$classList = preg_split('/\s+/', trim($classAttr)) ?: [];
+		/*
+         * Глобальный номер razdel на странице.
+         *
+         * razdel_1
+         * razdel_2
+         * razdel_3
+         * ...
+         */
+		$groupCounter = 0;
 
-			// текущая глава
-			if (in_array('subtitle', $classList, true)) {
-				$subtitleTitle = Text::cleanupText($child->plaintext);
+		foreach ($article->children() as $child) {
+			$classAttr = (string)(
+				$child->getAttribute('class') ?? ''
+			);
+
+			$classList = preg_split(
+				'/\s+/',
+				trim($classAttr)
+			) ?: [];
+
+			// =================================================
+			// SUBTITLE
+			// =================================================
+
+			if (
+				in_array(
+					'subtitle',
+					$classList,
+					true
+				)
+			) {
+				$subtitleTitle = Text::cleanupText(
+					$child->plaintext
+				);
 
 				if ($subtitleTitle === '') {
-					unset($subtitleTitle, $classAttr, $classList);
+					unset(
+						$subtitleTitle,
+						$classAttr,
+						$classList
+					);
+
 					continue;
 				}
 
-				// Если subtitle идёт сразу после subtitle —
-				// предыдущий subtitle становится родителем.
-				if ($lastElementWasSubtitle && $lastSubtitleTitle !== null && $lastSubtitleTitle !== '') {
+				/*
+                 * Два subtitle подряд:
+                 *
+                 * Часть 1
+                 * Глава 1
+                 *
+                 * Первый становится родителем.
+                 */
+				if (
+					$lastElementWasSubtitle
+					&& $lastSubtitleTitle !== null
+					&& $lastSubtitleTitle !== ''
+				) {
 					$parentChapter = $lastSubtitleTitle;
-					$currentChapter = $this->makeNestedChapterTitle($parentChapter, $subtitleTitle);
+
+					$currentChapter =
+						$this->makeNestedChapterTitle(
+							$parentChapter,
+							$subtitleTitle
+						);
 				}
-				// Если родитель уже найден ранее — добавляем его к последующим subtitle
-				elseif ($parentChapter !== null && $parentChapter !== '') {
-					$currentChapter = $this->makeNestedChapterTitle($parentChapter, $subtitleTitle);
+
+				/*
+                 * Родитель уже существует.
+                 */ elseif (
+					$parentChapter !== null
+					&& $parentChapter !== ''
+				) {
+					$currentChapter =
+						$this->makeNestedChapterTitle(
+							$parentChapter,
+							$subtitleTitle
+						);
 				}
-				// Обычное поведение, как было раньше
-				else {
+
+				/*
+                 * Обычная глава.
+                 */ else {
 					$currentChapter = $subtitleTitle;
 				}
 
 				$lastSubtitleTitle = $subtitleTitle;
 				$lastElementWasSubtitle = true;
 
-				unset($subtitleTitle, $classAttr, $classList); // чистим память
+				unset(
+					$subtitleTitle,
+					$classAttr,
+					$classList
+				);
+
 				continue;
 			}
 
-			// блок задач
-			if (in_array('razdel', $classList, true)) {
+			// =================================================
+			// RAZDEL
+			// =================================================
+
+			if (
+				in_array(
+					'razdel',
+					$classList,
+					true
+				)
+			) {
+				/*
+                 * Каждый отдельный div.razdel —
+                 * новая группа.
+                 */
+				$groupCounter++;
+
+				$groupName =
+					'razdel_' . $groupCounter;
+
+				/*
+                 * Номер задачи внутри конкретного razdel.
+                 */
+				$groupOrderNumber = 0;
+
 				$links = $child->find('a');
+
 				$hasParsedTasks = false;
 
 				foreach ($links as $a) {
-					$href = trim((string)$a->getAttribute('href'));
-					$title = Text::cleanupText($a->plaintext);
+					$href = trim(
+						(string)$a->getAttribute('href')
+					);
 
-					// проверка на заполненность данных
-					if ($href === '' || $title === '') {
-						unset($href, $title); // чистим память
+					$title = Text::cleanupText(
+						$a->plaintext
+					);
+
+					if (
+						$href === ''
+						|| $title === ''
+					) {
+						unset(
+							$href,
+							$title
+						);
+
 						continue;
 					}
 
 					if (!$this->isTaskHref($href)) {
-						unset($href, $title); // чистим память
+						unset(
+							$href,
+							$title
+						);
+
 						continue;
 					}
 
+					/*
+                     * Увеличиваем номер только для
+                     * реально добавленной задачи.
+                     */
+					$groupOrderNumber++;
+
 					$result[] = new TaskListItemDTO(
 						title: $title,
+
+						url: Text::makeAbsoluteURL(
+							self::DOMAIN,
+							$href
+						),
+
 						chapter: $currentChapter,
-						url: Text::makeAbsoluteURL(self::DOMAIN, $href)
+
+						group_name: $groupName,
+
+						order_number_in_group: $groupOrderNumber
 					);
 
 					$hasParsedTasks = true;
 
-					// чистим память
-					unset($href, $title);
+					unset(
+						$href,
+						$title
+					);
 				}
 
-				// Сбрасываем "subtitle подряд" только если в razdel реально были задачи.
-				// Это важно, чтобы служебные/пустые razdel не ломали определение родителя.
+				/*
+                 * Сбрасываем состояние двух subtitle подряд
+                 * только если в razdel действительно были задачи.
+                 */
 				if ($hasParsedTasks) {
 					$lastElementWasSubtitle = false;
 				}
 
-				unset($links, $hasParsedTasks); // чистим память
+				unset(
+					$links,
+					$hasParsedTasks,
+					$groupName,
+					$groupOrderNumber
+				);
 			}
 
-			unset($classAttr, $classList); // чистим память
+			unset(
+				$classAttr,
+				$classList
+			);
 		}
 
 		unset(
 			$currentChapter,
 			$parentChapter,
 			$lastSubtitleTitle,
-			$lastElementWasSubtitle
-		); // чистим память
+			$lastElementWasSubtitle,
+			$groupCounter
+		);
 
 		return $result;
 	}
 
-
-
 	/**
-	 * Парсинг нового формата: #extremum-slide-menu-index с sublnk/submenu и partName/partContent
+	 * Новый формат:
 	 *
-	 * Структура:
-	 * <ul#slidemenu>
-	 *   <li><span class="sublnk">Юнит 1</span></li>        ← глава (chapter)
-	 *   <li class="submenu">                                 ← блок задач
-	 *     <div class="partName">Step 1:</div>               ← подглава (subchapter)
-	 *     <div class="partContent"><a>...</a></div>          ← ссылки на задачи
-	 *   </li>
-	 *   ...
-	 * </ul>
-	 *
-	 * @param object $article Объект Simple PHP DOM
-	 * 
-	 * @return TaskListItemDTO[]
+	 * #slidemenu
+	 *   li
+	 *      span.sublnk
+	 *   li.submenu
 	 */
 	private function parseNewFormat(object $article): array
 	{
 		$result = [];
 
-		$slideMenu = $article->findOneOrFalse('#slidemenu');
+		$slideMenu = $article->findOneOrFalse(
+			'#slidemenu'
+		);
+
 		if (!$slideMenu) {
-			// пробуем найти по id контейнера
-			$container = $article->findOneOrFalse('#extremum-slide-menu-index');
+			$container = $article->findOneOrFalse(
+				'#extremum-slide-menu-index'
+			);
+
 			if ($container) {
-				$slideMenu = $container->findOneOrFalse('ul.reset-index');
+				$slideMenu =
+					$container->findOneOrFalse(
+						'ul.reset-index'
+					);
 			}
+
 			unset($container);
 		}
 
@@ -229,126 +388,295 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 		$currentChapter = null;
 
+		/*
+         * Счётчик razdel по всей странице.
+         */
+		$groupCounter = 0;
+
 		foreach ($slideMenu->children() as $li) {
-			$tag = strtolower((string)$li->tag);
+			$tag = strtolower(
+				(string)$li->tag
+			);
+
 			if ($tag !== 'li') {
 				continue;
 			}
 
-			$classAttr = (string)($li->getAttribute('class') ?? '');
-			$classList = preg_split('/\s+/', trim($classAttr)) ?: [];
+			$classAttr = (string)(
+				$li->getAttribute('class') ?? ''
+			);
 
-			// Элемент с классом "submenu" — блок задач для текущей главы
-			if (in_array('submenu', $classList, true)) {
-				$this->parseSubmenuBlock($li, $currentChapter, $result);
+			$classList = preg_split(
+				'/\s+/',
+				trim($classAttr)
+			) ?: [];
 
-				unset($classAttr, $classList);
+			/*
+             * submenu
+             */
+			if (
+				in_array(
+					'submenu',
+					$classList,
+					true
+				)
+			) {
+				$this->parseSubmenuBlock(
+					$li,
+					$currentChapter,
+					$result,
+					$groupCounter
+				);
+
+				unset(
+					$classAttr,
+					$classList
+				);
+
 				continue;
 			}
 
-			// Элемент без класса "submenu" — ищем span.sublnk (название главы)
-			$sublnk = $li->findOneOrFalse('span.sublnk');
+			/*
+             * Название главы.
+             */
+			$sublnk = $li->findOneOrFalse(
+				'span.sublnk'
+			);
+
 			if ($sublnk) {
-				$currentChapter = Text::cleanupText($sublnk->plaintext);
+				$currentChapter =
+					Text::cleanupText(
+						$sublnk->plaintext
+					);
+
 				unset($sublnk);
 			}
 
-			unset($classAttr, $classList);
+			unset(
+				$classAttr,
+				$classList
+			);
 		}
 
-		unset($slideMenu, $currentChapter);
+		unset(
+			$slideMenu,
+			$currentChapter,
+			$groupCounter
+		);
 
 		return $result;
 	}
 
 	/**
-	 * Обработка блока submenu: парсим пары partName/partContent
-	 * 
-	 * @param object $li Объект Simple PHP DOM
-	 * @param string|null $currentChapter Текущая глава
-	 * @param array $result Список задач
+	 * Обработка submenu.
 	 */
-	private function parseSubmenuBlock(object $li, ?string $currentChapter, array &$result): void
-	{
-		// Внутри submenu ищем div.sublnk1, в котором чередуются partName и блоки ссылок
-		$sublnk1 = $li->findOneOrFalse('div.sublnk1');
+	private function parseSubmenuBlock(
+		object $li,
+		?string $currentChapter,
+		array &$result,
+		int &$groupCounter
+	): void {
+		$sublnk1 = $li->findOneOrFalse(
+			'div.sublnk1'
+		);
+
 		if (!$sublnk1) {
-			// fallback: ищем блоки напрямую внутри li
 			$sublnk1 = $li;
 		}
 
 		$currentPartName = null;
 
 		foreach ($sublnk1->children() as $child) {
-			$childClassAttr = (string)($child->getAttribute('class') ?? '');
-			$childClassList = preg_split('/\s+/', trim($childClassAttr)) ?: [];
+			$childClassAttr = (string)(
+				$child->getAttribute('class') ?? ''
+			);
 
-			if (in_array('partName', $childClassList, true)) {
-				$partText = Text::cleanupText($child->plaintext);
-				$currentPartName = rtrim($partText, ':');
+			$childClassList = preg_split(
+				'/\s+/',
+				trim($childClassAttr)
+			) ?: [];
 
-				unset($partText, $childClassAttr, $childClassList);
+			/*
+             * Название подраздела.
+             */
+			if (
+				in_array(
+					'partName',
+					$childClassList,
+					true
+				)
+			) {
+				$partText = Text::cleanupText(
+					$child->plaintext
+				);
+
+				$currentPartName = rtrim(
+					$partText,
+					':'
+				);
+
+				unset(
+					$partText,
+					$childClassAttr,
+					$childClassList
+				);
+
 				continue;
 			}
 
+			/*
+             * Если новый формат тоже содержит настоящий
+             * div.razdel — создаём для него группу.
+             */
 			if (
-				in_array('partContent', $childClassList, true)
-				|| in_array('razdel', $childClassList, true)
+				in_array(
+					'razdel',
+					$childClassList,
+					true
+				)
 			) {
-				$this->parseLinksBlock($child, $currentChapter, $currentPartName, $result);
+				$groupCounter++;
+
+				$groupName =
+					'razdel_' . $groupCounter;
+
+				$this->parseLinksBlock(
+					block: $child,
+					currentChapter: $currentChapter,
+					currentPartName: $currentPartName,
+					result: $result,
+					groupName: $groupName
+				);
+
+				unset(
+					$groupName,
+					$childClassAttr,
+					$childClassList
+				);
+
+				continue;
 			}
 
-			unset($childClassAttr, $childClassList);
+			/*
+             * partContent сам по себе razdel не является,
+             * поэтому группу ему искусственно не присваиваем.
+             */
+			if (
+				in_array(
+					'partContent',
+					$childClassList,
+					true
+				)
+			) {
+				$this->parseLinksBlock(
+					block: $child,
+					currentChapter: $currentChapter,
+					currentPartName: $currentPartName,
+					result: $result,
+					groupName: null
+				);
+			}
+
+			unset(
+				$childClassAttr,
+				$childClassList
+			);
 		}
 
-		unset($sublnk1, $currentPartName);
+		unset(
+			$sublnk1,
+			$currentPartName
+		);
 	}
 
 	/**
-	 * Парсинг ссылок внутри блока задач
-	 * 
-	 * @param object $block Объект Simple PHP DOM
-	 * @param string|null $currentChapter Текущая глава
-	 * @param string|null $currentPartName Текущая подглава
-	 * @param array $result Список задач
+	 * Парсинг ссылок.
 	 */
-	private function parseLinksBlock(object $block, ?string $currentChapter, ?string $currentPartName, array &$result): void
-	{
+	private function parseLinksBlock(
+		object $block,
+		?string $currentChapter,
+		?string $currentPartName,
+		array &$result,
+		?string $groupName = null
+	): void {
 		$links = $block->find('a');
 
-		foreach ($links as $a) {
-			$href = trim((string)$a->getAttribute('href'));
-			$title = Text::cleanupText($a->plaintext);
+		/*
+         * Нумерация начинается заново для каждой группы.
+         */
+		$groupOrderNumber = 0;
 
-			if ($href === '' || $title === '') {
-				unset($href, $title);
+		foreach ($links as $a) {
+			$href = trim(
+				(string)$a->getAttribute('href')
+			);
+
+			$title = Text::cleanupText(
+				$a->plaintext
+			);
+
+			if (
+				$href === ''
+				|| $title === ''
+			) {
+				unset(
+					$href,
+					$title
+				);
+
 				continue;
 			}
 
 			if (!$this->isTaskHref($href)) {
-				unset($href, $title);
+				unset(
+					$href,
+					$title
+				);
+
 				continue;
 			}
 
-			$chapter = $this->makeChapterTitle($currentChapter, $currentPartName);
+			$chapter = $this->makeChapterTitle(
+				$currentChapter,
+				$currentPartName
+			);
+
+			if ($groupName !== null) {
+				$groupOrderNumber++;
+			}
 
 			$result[] = new TaskListItemDTO(
 				title: $title,
+
+				url: Text::makeAbsoluteURL(
+					self::DOMAIN,
+					$href
+				),
+
 				chapter: $chapter,
-				url: Text::makeAbsoluteURL(self::DOMAIN, $href)
+
+				group_name: $groupName,
+
+				order_number_in_group: $groupName !== null
+					? $groupOrderNumber
+					: null
 			);
 
-			unset($href, $title, $chapter);
+			unset(
+				$href,
+				$title,
+				$chapter
+			);
 		}
 
-		unset($links);
+		unset(
+			$links,
+			$groupOrderNumber
+		);
 	}
 
 	/**
-	 * Проверка, что ссылка ведёт на задачу/ответ
-	 * 
-	 * @param string $href Ссылка
-	 * @return bool
+	 * Проверка ссылки на задачу.
 	 */
 	private function isTaskHref(string $href): bool
 	{
@@ -358,18 +686,30 @@ class ReshakTaskListParser implements TaskListParserInterface
 			return false;
 		}
 
-		// Старый/основной формат ответов Reshak
-		if (str_starts_with($href, '/otvet/')) {
+		if (
+			str_starts_with(
+				$href,
+				'/otvet/'
+			)
+		) {
 			return true;
 		}
 
-		// Абсолютные ссылки оставляем, как было раньше
-		if (preg_match('#^https?://#i', $href)) {
+		if (
+			preg_match(
+				'#^https?://#i',
+				$href
+			)
+		) {
 			return true;
 		}
 
-		// Прямые ссылки на картинки задач
-		if (preg_match('~^/[^?#]+/images/.+\.(?:jpe?g|png|webp|gif)(?:[?#].*)?$~i', $href)) {
+		if (
+			preg_match(
+				'~^/[^?#]+/images/.+\.(?:jpe?g|png|webp|gif)(?:[?#].*)?$~i',
+				$href
+			)
+		) {
 			return true;
 		}
 
@@ -377,18 +717,23 @@ class ReshakTaskListParser implements TaskListParserInterface
 	}
 
 	/**
-	 * Формирование названия главы с учётом подраздела
-	 * 
-	 * @param string|null $currentChapter Текущая глава
-	 * @param string|null $currentPartName Текущая подглава
-	 * 
-	 * @return string|null
+	 * Формирование главы нового формата.
 	 */
-	private function makeChapterTitle(?string $currentChapter, ?string $currentPartName): ?string
-	{
-		if ($currentPartName !== null && $currentPartName !== '') {
-			return $currentChapter !== null && $currentChapter !== ''
-				? $currentChapter . ' — ' . $currentPartName
+	private function makeChapterTitle(
+		?string $currentChapter,
+		?string $currentPartName
+	): ?string {
+		if (
+			$currentPartName !== null
+			&& $currentPartName !== ''
+		) {
+			return (
+				$currentChapter !== null
+				&& $currentChapter !== ''
+			)
+				? $currentChapter
+				. ' — '
+				. $currentPartName
 				: $currentPartName;
 		}
 
@@ -396,33 +741,41 @@ class ReshakTaskListParser implements TaskListParserInterface
 	}
 
 	/**
-	 * Формирование вложенного названия главы
+	 * Формирование вложенной главы.
 	 *
-	 * Пример:
-	 * parent: Задачи для подготовки к ЕГЭ.
-	 * child: Задание 3.
-	 *
-	 * Результат:
-	 * Задачи для подготовки к ЕГЭ. Задание 3.
-	 *
-	 * @param string|null $parentChapter Родительская глава
-	 * @param string|null $childChapter Дочерняя глава
-	 *
-	 * @return string|null
+	 * Часть 1 + Глава 1
+	 * =>
+	 * Часть 1 Глава 1
 	 */
-	private function makeNestedChapterTitle(?string $parentChapter, ?string $childChapter): ?string
-	{
-		$parentChapter = $parentChapter !== null ? trim($parentChapter) : '';
-		$childChapter = $childChapter !== null ? trim($childChapter) : '';
+	private function makeNestedChapterTitle(
+		?string $parentChapter,
+		?string $childChapter
+	): ?string {
+		$parentChapter =
+			$parentChapter !== null
+			? trim($parentChapter)
+			: '';
 
-		if ($parentChapter !== '' && $childChapter !== '') {
-			return $parentChapter . ' ' . $childChapter;
+		$childChapter =
+			$childChapter !== null
+			? trim($childChapter)
+			: '';
+
+		if (
+			$parentChapter !== ''
+			&& $childChapter !== ''
+		) {
+			return $parentChapter
+				. ' '
+				. $childChapter;
 		}
 
 		if ($childChapter !== '') {
 			return $childChapter;
 		}
 
-		return $parentChapter !== '' ? $parentChapter : null;
+		return $parentChapter !== ''
+			? $parentChapter
+			: null;
 	}
 }
