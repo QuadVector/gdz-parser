@@ -2,69 +2,128 @@
 
 namespace QuadVector\GDZParser\BookParser;
 
-use QuadVector\GDZParser\BookParser\BookParserInterface;
 use QuadVector\GDZParser\DTO\BookDTO;
 use QuadVector\GDZParser\Exception\AccessDeniedException;
 use QuadVector\GDZParser\Exception\PageNotFoundException;
 use QuadVector\GDZParser\Exception\ParseException;
 use QuadVector\GDZParser\Helper\CURL;
-use QuadVector\GDZParser\ValueObject\Proxy;
 use QuadVector\GDZParser\Helper\Text;
+use QuadVector\GDZParser\ValueObject\Proxy;
 use voku\helper\HtmlDomParser;
 
 class ReshakBookParser implements BookParserInterface
 {
-	const DOMAIN = 'reshak.ru';
+	private const DOMAIN = 'reshak.ru';
 
 	/**
-	 * Получить список книг
-	 * @param string $url Ссылка на страницу с книгами
-	 * 
-	 * @return void
+	 * Получить список книг.
+	 *
+	 * @return BookDTO[]
 	 */
-	public function parse(string $url = '', ?Proxy $proxy = null, ?int $timeout = null): array
-	{
-		// обработка относительных ссылок
-		$url = Text::makeAbsoluteURL(self::DOMAIN, $url);
+	public function parse(
+		string $url = '',
+		?Proxy $proxy = null,
+		?int $timeout = null
+	): array {
+		$url = Text::makeAbsoluteURL(
+			self::DOMAIN,
+			$url
+		);
 
-		// получаем HTML-код страницы
-		$html = CURL::fileGetContents($url, $proxy, $timeout);
+		$html = CURL::fileGetContents(
+			$url,
+			$proxy,
+			$timeout
+		);
 
-		if (!$html) {
-			throw new PageNotFoundException("Can't open {$url}.");
+		if (
+			$html === false
+			|| $html === ''
+		) {
+			throw new PageNotFoundException(
+				"Can't open {$url}."
+			);
 		}
 
-		if ($html === 'Access Denied') {
-			throw new AccessDeniedException("Access denied for {$url}");
+		if (
+			trim($html) === 'Access Denied'
+		) {
+			throw new AccessDeniedException(
+				"Access denied for {$url}"
+			);
 		}
 
-		// обрабатываем HTML код и собираем список книг
-		$dom = HtmlDomParser::str_get_html($html);
-		unset($html); // чистим память
+		$dom = HtmlDomParser::str_get_html(
+			$html
+		);
+
+		unset($html);
 
 		if (!$dom) {
-			throw new ParseException("Can't parse {$url}.");
+			throw new ParseException(
+				"Can't parse {$url}."
+			);
 		}
 
-		$domBooks = $dom->findMultiOrFalse('.list_gdz .main_gdz-div');
-		if (!$domBooks) {
-			unset($dom); // чистим память
+		$domBooks =
+			$dom->findMultiOrFalse(
+				'.list_gdz .main_gdz-div'
+			);
 
-			throw new ParseException("Can't find books on {$url}");
+		if (!$domBooks) {
+			unset($dom);
+
+			throw new ParseException(
+				"Can't find books on {$url}"
+			);
 		}
 
 		$result = [];
 
 		foreach ($domBooks as $bookNode) {
-			$linkNode = $bookNode->find('a', 0);
-			$titleNode = $bookNode->find('.subjectName', 0);
-			$dopTitleNode = $bookNode->find('.dopName', 0);
-			$authorNode = $bookNode->find('.author', 0);
-			$subjectNode = $bookNode->find('.subject', 0);
-			$gradeNode = $bookNode->find('.class-number', 0);
+			$linkNode =
+				$bookNode->find(
+					'a',
+					0
+				);
 
-			if (!$linkNode || !$titleNode || !$authorNode || !$gradeNode || !$subjectNode) {
-				// чистим память
+			$titleNode =
+				$bookNode->find(
+					'.subjectName',
+					0
+				);
+
+			$dopTitleNode =
+				$bookNode->find(
+					'.dopName',
+					0
+				);
+
+			$authorNode =
+				$bookNode->find(
+					'.author',
+					0
+				);
+
+			$subjectNode =
+				$bookNode->find(
+					'.subject',
+					0
+				);
+
+			$gradeNode =
+				$bookNode->find(
+					'.class-number',
+					0
+				);
+
+			if (
+				!$linkNode
+				|| !$titleNode
+				|| !$authorNode
+				|| !$gradeNode
+				|| !$subjectNode
+			) {
 				unset(
 					$linkNode,
 					$titleNode,
@@ -73,24 +132,79 @@ class ReshakBookParser implements BookParserInterface
 					$subjectNode,
 					$gradeNode
 				);
+
 				continue;
 			}
 
-			$title = Text::cleanupText($titleNode->plaintext);
+			$title =
+				Text::cleanupText(
+					$titleNode->plaintext
+				);
 
 			if ($dopTitleNode) {
-				$title .= ' ' . Text::cleanupText($dopTitleNode->plaintext);
+				$dopTitle =
+					Text::cleanupText(
+						$dopTitleNode->plaintext
+					);
+
+				if ($dopTitle !== '') {
+					$title .= ' ' . $dopTitle;
+				}
+
+				unset($dopTitle);
 			}
+
+			$href =
+				Text::cleanupText(
+					(string)$linkNode->href
+				);
+
+			if (
+				$title === ''
+				|| $href === ''
+			) {
+				unset(
+					$linkNode,
+					$titleNode,
+					$dopTitleNode,
+					$authorNode,
+					$subjectNode,
+					$gradeNode,
+					$title,
+					$href
+				);
+
+				continue;
+			}
+
+			$bookUrl =
+				Text::makeAbsoluteURL(
+					self::DOMAIN,
+					$href
+				);
 
 			$result[] = new BookDTO(
 				title: $title,
-				author: Text::cleanupText($authorNode->plaintext),
-				grade: Text::cleanupText($gradeNode->plaintext),
-				subject: Text::cleanupText($subjectNode->plaintext),
-				url: Text::makeAbsoluteURL(self::DOMAIN, Text::cleanupText($linkNode->href))
+
+				author: Text::cleanupText(
+					$authorNode->plaintext
+				),
+
+				grade: Text::cleanupText(
+					$gradeNode->plaintext
+				),
+
+				subject: Text::cleanupText(
+					$subjectNode->plaintext
+				),
+
+				url: $bookUrl,
+
+				book_id: Text::generateBookId(
+					$bookUrl
+				)
 			);
 
-			// чистим память
 			unset(
 				$linkNode,
 				$titleNode,
@@ -98,13 +212,22 @@ class ReshakBookParser implements BookParserInterface
 				$authorNode,
 				$subjectNode,
 				$gradeNode,
-				$title
+				$title,
+				$href,
+				$bookUrl
 			);
 		}
 
-		// чистим память
-		unset($domBooks, $dom);
-		if (function_exists('gc_collect_cycles')) {
+		unset(
+			$domBooks,
+			$dom
+		);
+
+		if (
+			function_exists(
+				'gc_collect_cycles'
+			)
+		) {
 			gc_collect_cycles();
 		}
 
