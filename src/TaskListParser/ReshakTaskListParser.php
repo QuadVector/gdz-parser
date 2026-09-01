@@ -71,17 +71,29 @@ class ReshakTaskListParser implements TaskListParserInterface
 		}
 
 		/*
-         * Сначала пробуем старый формат.
+         * Новый формат проверяем первым. На таких страницах задачи находятся
+         * внутри #slidemenu и div.partContent, а не в обычных div.razdel.
          */
-		$result = $this->parseOldFormat(
+		$result = $this->parseNewFormat(
 			$article
 		);
 
 		/*
-         * Если ничего нет — новый формат.
+         * Если нового меню нет — пробуем старый формат.
          */
 		if (empty($result)) {
-			$result = $this->parseNewFormat(
+			$result = $this->parseOldFormat(
+				$article
+			);
+		}
+
+		/*
+         * Защитный вариант для неизвестной верстки. Если распознать блоки
+         * разделов не удалось, сохраняем все ссылки на задачи в razdel_1 в том
+         * порядке, в котором они находятся в HTML.
+         */
+		if (empty($result)) {
+			$result = $this->parseFallbackFormat(
 				$article
 			);
 		}
@@ -324,6 +336,13 @@ class ReshakTaskListParser implements TaskListParserInterface
                  */
 				if ($hasParsedTasks) {
 					$lastElementWasSubtitle = false;
+				} else {
+					/*
+                     * Некоторые служебные div.razdel не содержат ни одной
+                     * ссылки на задачу. Они не должны создавать пропуск в
+                     * последовательности razdel_N.
+                     */
+					$groupCounter--;
 				}
 
 				unset(
@@ -468,7 +487,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 	}
 
 	/**
-	 * Обработка submenu.
+	 * Обработка submenu с поддержкой поломанной вложенности HTML.
 	 */
 	private function parseSubmenuBlock(
 		object $li,
@@ -486,102 +505,13 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 		$currentPartName = null;
 
-		foreach ($sublnk1->children() as $child) {
-			$childClassAttr = (string)(
-				$child->getAttribute('class') ?? ''
-			);
-
-			$childClassList = preg_split(
-				'/\s+/',
-				trim($childClassAttr)
-			) ?: [];
-
-			/*
-             * Название подраздела.
-             */
-			if (
-				in_array(
-					'partName',
-					$childClassList,
-					true
-				)
-			) {
-				$partText = Text::cleanupText(
-					$child->plaintext
-				);
-
-				$currentPartName = rtrim(
-					$partText,
-					':'
-				);
-
-				unset(
-					$partText,
-					$childClassAttr,
-					$childClassList
-				);
-
-				continue;
-			}
-
-			/*
-             * Если новый формат тоже содержит настоящий
-             * div.razdel — создаём для него группу.
-             */
-			if (
-				in_array(
-					'razdel',
-					$childClassList,
-					true
-				)
-			) {
-				$groupCounter++;
-
-				$groupName =
-					'razdel_' . $groupCounter;
-
-				$this->parseLinksBlock(
-					block: $child,
-					currentChapter: $currentChapter,
-					currentPartName: $currentPartName,
-					result: $result,
-					groupName: $groupName
-				);
-
-				unset(
-					$groupName,
-					$childClassAttr,
-					$childClassList
-				);
-
-				continue;
-			}
-
-			/*
-             * partContent сам по себе razdel не является,
-             * поэтому группу ему искусственно не присваиваем.
-             */
-			if (
-				in_array(
-					'partContent',
-					$childClassList,
-					true
-				)
-			) {
-				$this->parseLinksBlock(
-					block: $child,
-					currentChapter: $currentChapter,
-					currentPartName: $currentPartName,
-					result: $result,
-					groupName: null
-				);
-			}
-
-			unset(
-				$childClassAttr,
-				$childClassList
-			);
-		}
+		$this->parseSubmenuChildren(
+			container: $sublnk1,
+			currentChapter: $currentChapter,
+			currentPartName: $currentPartName,
+			result: $result,
+			groupCounter: $groupCounter
+		);
 
 		unset(
 			$sublnk1,
@@ -590,60 +520,223 @@ class ReshakTaskListParser implements TaskListParserInterface
 	}
 
 	/**
-	 * Парсинг ссылок.
+	 * Рекурсивный обход нового меню в фактическом DOM-порядке.
+	 *
+	 * На некоторых страницах Reshak из-за некорректно закрытого div следующие
+	 * partName и partContent становятся вложенными в предыдущий блок. Обход
+	 * только прямых детей в таком случае теряет целые модули задач.
+	 */
+	private function parseSubmenuChildren(
+		object $container,
+		?string $currentChapter,
+		?string &$currentPartName,
+		array &$result,
+		int &$groupCounter
+	): void {
+		foreach ($container->children() as $child) {
+			$classAttr = (string)(
+				$child->getAttribute('class') ?? ''
+			);
+			$classList = preg_split(
+				'/\s+/',
+				trim($classAttr)
+			) ?: [];
+
+			if (in_array('partName', $classList, true)) {
+				$hasNestedStructure =
+					(bool)$child->findOneOrFalse('div.partName')
+					|| (bool)$child->findOneOrFalse('div.partContent')
+					|| (bool)$child->findOneOrFalse('div.razdel');
+
+				/*
+                 * У поломанного контейнера plaintext включает весь остаток
+                 * меню. Вложенные настоящие partName будут обработаны ниже.
+                 */
+				if (!$hasNestedStructure) {
+					$partText = Text::cleanupText(
+						$child->plaintext
+					);
+					$currentPartName = rtrim(
+						$partText,
+						':'
+					);
+
+					unset($partText);
+				} else {
+					$this->parseSubmenuChildren(
+						container: $child,
+						currentChapter: $currentChapter,
+						currentPartName: $currentPartName,
+						result: $result,
+						groupCounter: $groupCounter
+					);
+				}
+
+				unset(
+					$hasNestedStructure,
+					$classAttr,
+					$classList
+				);
+
+				continue;
+			}
+
+			$isTaskGroup =
+				in_array('razdel', $classList, true)
+				|| in_array('partContent', $classList, true);
+
+			if ($isTaskGroup) {
+				$nextGroupNumber = $groupCounter + 1;
+				$groupName = 'razdel_' . $nextGroupNumber;
+				$parsedTasks = $this->parseLinksBlock(
+					block: $child,
+					currentChapter: $currentChapter,
+					currentPartName: $currentPartName,
+					result: $result,
+					groupName: $groupName
+				);
+
+				if ($parsedTasks > 0) {
+					$groupCounter = $nextGroupNumber;
+				}
+
+				/*
+                 * Текущий блок может содержать вложенные группы из-за
+                 * поломанной разметки. Его собственные ссылки уже добавлены,
+                 * вложенные структурные блоки обрабатываем отдельно.
+                 */
+				$this->parseSubmenuChildren(
+					container: $child,
+					currentChapter: $currentChapter,
+					currentPartName: $currentPartName,
+					result: $result,
+					groupCounter: $groupCounter
+				);
+
+				unset(
+					$parsedTasks,
+					$nextGroupNumber,
+					$groupName,
+					$isTaskGroup,
+					$classAttr,
+					$classList
+				);
+
+				continue;
+			}
+
+			/* Обычный контейнер тоже может скрывать разделы глубже. */
+			$this->parseSubmenuChildren(
+				container: $child,
+				currentChapter: $currentChapter,
+				currentPartName: $currentPartName,
+				result: $result,
+				groupCounter: $groupCounter
+			);
+
+			unset(
+				$isTaskGroup,
+				$classAttr,
+				$classList
+			);
+		}
+	}
+
+	/**
+	 * Добавляет ссылки текущего структурного блока и возвращает их количество.
 	 */
 	private function parseLinksBlock(
 		object $block,
 		?string $currentChapter,
 		?string $currentPartName,
 		array &$result,
-		?string $groupName = null
-	): void {
-		$links = $block->find('a');
-
-		/*
-         * Нумерация начинается заново для каждой группы.
-         */
+		string $groupName
+	): int {
 		$groupOrderNumber = 0;
 
-		foreach ($links as $a) {
-			$href = trim(
-				(string)$a->getAttribute('href')
-			);
+		$this->parseOwnedLinks(
+			container: $block,
+			currentChapter: $currentChapter,
+			currentPartName: $currentPartName,
+			result: $result,
+			groupName: $groupName,
+			groupOrderNumber: $groupOrderNumber
+		);
 
+		return $groupOrderNumber;
+	}
+
+	/**
+	 * Парсит ссылки, принадлежащие именно текущему структурному блоку.
+	 * Вложенные partName/partContent/razdel обрабатываются отдельно, поэтому
+	 * здесь они пропускаются и задачи не дублируются.
+	 */
+	private function parseOwnedLinks(
+		object $container,
+		?string $currentChapter,
+		?string $currentPartName,
+		array &$result,
+		string $groupName,
+		int &$groupOrderNumber
+	): void {
+		foreach ($container->children() as $child) {
+			$tag = strtolower((string)$child->tag);
+
+			if ($tag !== 'a') {
+				$classAttr = (string)(
+					$child->getAttribute('class') ?? ''
+				);
+				$classList = preg_split(
+					'/\s+/',
+					trim($classAttr)
+				) ?: [];
+
+				if (
+					in_array('partName', $classList, true)
+					|| in_array('partContent', $classList, true)
+					|| in_array('razdel', $classList, true)
+				) {
+					unset($classAttr, $classList);
+
+					continue;
+				}
+
+				$this->parseOwnedLinks(
+					container: $child,
+					currentChapter: $currentChapter,
+					currentPartName: $currentPartName,
+					result: $result,
+					groupName: $groupName,
+					groupOrderNumber: $groupOrderNumber
+				);
+
+				unset($classAttr, $classList);
+
+				continue;
+			}
+
+			$href = trim(
+				(string)$child->getAttribute('href')
+			);
 			$title = Text::cleanupText(
-				$a->plaintext
+				$child->plaintext
 			);
 
 			if (
 				$href === ''
 				|| $title === ''
+				|| !$this->isTaskHref($href)
 			) {
-				unset(
-					$href,
-					$title
-				);
+				unset($href, $title);
 
 				continue;
 			}
 
-			if (!$this->isTaskHref($href)) {
-				unset(
-					$href,
-					$title
-				);
-
-				continue;
-			}
-
+			$groupOrderNumber++;
 			$chapter = $this->makeChapterTitle(
 				$currentChapter,
 				$currentPartName
 			);
-
-			if ($groupName !== null) {
-				$groupOrderNumber++;
-			}
 
 			$result[] = new TaskListItemDTO(
 				title: $title,
@@ -657,22 +750,67 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 				group_id: $groupName,
 
-				order_number_in_group: $groupName !== null
-					? $groupOrderNumber
-					: null
+				order_number_in_group: $groupOrderNumber
 			);
 
-			unset(
-				$href,
-				$title,
-				$chapter
+			unset($href, $title, $chapter);
+		}
+	}
+
+	/**
+	 * Резервный парсинг неизвестной верстки.
+	 *
+	 * Все найденные ссылки на задачи попадают в razdel_1. Их порядок полностью
+	 * совпадает с порядком ссылок в исходном HTML и не зависит от текста title.
+	 */
+	private function parseFallbackFormat(object $article): array
+	{
+		$result = [];
+		$groupOrderNumber = 0;
+		$links = $article->find('a');
+
+		foreach ($links as $a) {
+			$href = trim(
+				(string)$a->getAttribute('href')
 			);
+
+			$title = Text::cleanupText(
+				$a->plaintext
+			);
+
+			if (
+				$href === ''
+				|| $title === ''
+				|| !$this->isTaskHref($href)
+			) {
+				unset($href, $title);
+
+				continue;
+			}
+
+			$groupOrderNumber++;
+
+			$result[] = new TaskListItemDTO(
+				title: $title,
+
+				url: Text::makeAbsoluteURL(
+					self::DOMAIN,
+					$href
+				),
+
+				chapter: null,
+
+				group_id: 'razdel_1',
+
+				order_number_in_group: $groupOrderNumber
+			);
+
+			unset($href, $title);
 		}
 
-		unset(
-			$links,
-			$groupOrderNumber
-		);
+		unset($links, $groupOrderNumber);
+
+		return $result;
 	}
 
 	/**
@@ -695,13 +833,27 @@ class ReshakTaskListParser implements TaskListParserInterface
 			return true;
 		}
 
-		if (
-			preg_match(
-				'#^https?://#i',
-				$href
-			)
-		) {
-			return true;
+		if (preg_match('#^https?://#i', $href)) {
+			$parts = parse_url($href);
+			$host = strtolower((string)($parts['host'] ?? ''));
+			$path = (string)($parts['path'] ?? '');
+
+			$isReshakHost =
+				$host === self::DOMAIN
+				|| str_ends_with($host, '.' . self::DOMAIN);
+
+			if (!$isReshakHost) {
+				return false;
+			}
+
+			if (str_starts_with($path, '/otvet/')) {
+				return true;
+			}
+
+			return (bool)preg_match(
+				'~/images/.+\.(?:jpe?g|png|webp|gif)$~i',
+				$path
+			);
 		}
 
 		if (
