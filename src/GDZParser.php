@@ -7,13 +7,11 @@ use League\CLImate\CLImate;
 use QuadVector\GDZParser\BookParser\BookParserContext;
 use QuadVector\GDZParser\DTO\BookDTO;
 use QuadVector\GDZParser\DTO\TaskListItemDTO;
-use QuadVector\GDZParser\Exception\AccessDeniedException;
-use QuadVector\GDZParser\Exception\PageNotFoundException;
 use QuadVector\GDZParser\Exception\ParseException;
+use QuadVector\GDZParser\Helper\Text;
 use QuadVector\GDZParser\TaskListParser\TaskListParserContext;
 use QuadVector\GDZParser\TaskParser\TaskParserContext;
 use QuadVector\GDZParser\ValueObject\Proxy;
-use QuadVector\GDZParser\Helper\Text;
 
 class GDZParser
 {
@@ -27,33 +25,49 @@ class GDZParser
 
     protected ?TaskParserContext $taskParserContext = null;
 
+    /**
+     * Текущая позиция в списке прокси.
+     *
+     * Прокси теперь используются последовательно:
+     *
+     * 1 -> 2 -> 3 -> 4 -> 1 -> ...
+     *
+     * Это намного лучше случайного выбора для retry.
+     */
+    private int $proxyIndex = 0;
+
     public function __construct(
         GDZParserConfig $config
     ) {
         $this->cli = new CLImate();
+
         $this->config = $config;
 
-        if (!is_null($this->config->bookParser)) {
+        if ($this->config->bookParser !== null) {
             $this->bookParserContext =
                 new BookParserContext(
                     $this->config->bookParser
                 );
         }
 
-        if (!is_null($this->config->taskListParser)) {
+        if ($this->config->taskListParser !== null) {
             $this->taskListParserContext =
                 new TaskListParserContext(
                     $this->config->taskListParser
                 );
         }
 
-        if (!is_null($this->config->taskParser)) {
+        if ($this->config->taskParser !== null) {
             $this->taskParserContext =
                 new TaskParserContext(
                     $this->config->taskParser
                 );
         }
     }
+
+    // ============================================================
+    // CONFIG
+    // ============================================================
 
     private function getMode(): string
     {
@@ -101,28 +115,287 @@ class GDZParser
         return $this->getMode() === 'all';
     }
 
-    private function getRandomProxy(): ?Proxy
+    // ============================================================
+    // PROXY
+    // ============================================================
+
+    /**
+     * Получить следующий прокси.
+     *
+     * В отличие от старого getRandomProxy(),
+     * один и тот же плохой прокси не может случайно
+     * выпасть несколько раз подряд.
+     */
+    private function getNextProxy(): ?Proxy
     {
-        if (
+        $count =
             count(
                 $this->config->proxy
-            ) === 0
+            );
+
+        if ($count === 0) {
+            return null;
+        }
+
+        $proxy =
+            $this->config->proxy[$this->proxyIndex % $count];
+
+        $this->proxyIndex++;
+
+        return $proxy;
+    }
+
+    // ============================================================
+    // RETRY
+    // ============================================================
+
+    /**
+     * Подождать перед повторной попыткой.
+     *
+     * Попытка 1 -> 1 сек.
+     * Попытка 2 -> 2 сек.
+     * ...
+     * Максимум -> 5 сек.
+     */
+    private function waitBeforeRetry(
+        int $attempt
+    ): void {
+        $delay = min(
+            max($attempt, 1),
+            5
+        );
+
+        if ($this->config->showLogs) {
+            $this->cli->output(
+                "<dim>Retrying in {$delay} sec...</dim>"
+            );
+        }
+
+        sleep($delay);
+    }
+
+    // ============================================================
+    // JSON
+    // ============================================================
+
+    /**
+     * Безопасно записать JSON.
+     *
+     * Сначала данные записываются во временный файл,
+     * затем временный файл заменяет основной.
+     */
+    private function saveJson(
+        string $filePath,
+        mixed $data
+    ): void {
+        $directory =
+            dirname(
+                $filePath
+            );
+
+        if (!is_dir($directory)) {
+            if (
+                !mkdir(
+                    $directory,
+                    0777,
+                    true
+                )
+                && !is_dir($directory)
+            ) {
+                throw new \RuntimeException(
+                    "Failed to create folder: {$directory}"
+                );
+            }
+        }
+
+        $json =
+            json_encode(
+                $data,
+                JSON_UNESCAPED_UNICODE
+                    | JSON_UNESCAPED_SLASHES
+                    | JSON_THROW_ON_ERROR
+            );
+
+        $temporaryFile =
+            $filePath
+            . '.tmp.'
+            . getmypid()
+            . '.'
+            . bin2hex(
+                random_bytes(4)
+            );
+
+        $saveStatus =
+            file_put_contents(
+                $temporaryFile,
+                $json,
+                LOCK_EX
+            );
+
+        if ($saveStatus === false) {
+            @unlink(
+                $temporaryFile
+            );
+
+            throw new \RuntimeException(
+                "Failed to save temporary file: {$temporaryFile}"
+            );
+        }
+
+        /*
+         * На Linux rename() заменяет существующий файл.
+         *
+         * На Windows это может не сработать,
+         * поэтому предусмотрен fallback.
+         */
+        if (
+            !@rename(
+                $temporaryFile,
+                $filePath
+            )
+        ) {
+            if (is_file($filePath)) {
+                @unlink(
+                    $filePath
+                );
+            }
+
+            if (
+                !@rename(
+                    $temporaryFile,
+                    $filePath
+                )
+            ) {
+                @unlink(
+                    $temporaryFile
+                );
+
+                throw new \RuntimeException(
+                    "Failed to move temporary file to: {$filePath}"
+                );
+            }
+        }
+    }
+
+    // ============================================================
+    // BOOK CACHE
+    // ============================================================
+
+    /**
+     * Загрузить книги из books.json.
+     *
+     * Возвращает null, если кеш:
+     *
+     * - отсутствует;
+     * - пустой;
+     * - содержит битый JSON;
+     * - содержит некорректные записи.
+     *
+     * В таком случае URL будет запрошен заново.
+     *
+     * @return BookDTO[]|null
+     */
+    private function loadStoredBooks(
+        string $booksFilePath
+    ): ?array {
+        if (!is_file($booksFilePath)) {
+            return null;
+        }
+
+        $content =
+            file_get_contents(
+                $booksFilePath
+            );
+
+        if (
+            $content === false
+            || trim($content) === ''
         ) {
             return null;
         }
 
-        return $this->config->proxy[array_rand(
-                $this->config->proxy
-            )];
+        try {
+            $parsedBooks =
+                json_decode(
+                    $content,
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR
+                );
+        } catch (Exception) {
+            return null;
+        }
+
+        if (
+            !is_array($parsedBooks)
+            || count($parsedBooks) === 0
+        ) {
+            /*
+             * ВАЖНО:
+             *
+             * [] больше не считается хорошим кешем.
+             *
+             * Иначе один временный сбой мог навсегда
+             * "закешировать" отсутствие книг.
+             */
+            return null;
+        }
+
+        $books = [];
+
+        try {
+            foreach ($parsedBooks as $bookData) {
+                if (!is_array($bookData)) {
+                    return null;
+                }
+
+                if (
+                    empty($bookData['title'])
+                    || empty($bookData['url'])
+                ) {
+                    return null;
+                }
+
+                $books[] =
+                    BookDTO::fromArray(
+                        $bookData
+                    );
+            }
+        } catch (Exception) {
+            return null;
+        }
+
+        if (count($books) === 0) {
+            return null;
+        }
+
+        /*
+         * Заодно перезаписываем старый books.json
+         * в новом формате с book_id.
+         */
+        try {
+            $this->saveJson(
+                $booksFilePath,
+                $books
+            );
+        } catch (Exception $ex) {
+            if ($this->config->showLogs) {
+                $this->cli
+                    ->red()
+                    ->out(
+                        "Failed to normalize books cache: "
+                            . $ex->getMessage()
+                    );
+            }
+        }
+
+        return $books;
     }
 
-    /**
-     * Проверить, содержит ли старый taskList
-     * данные о группах.
-     *
-     * book_id при этом можно восстановить без перепарсинга,
-     * потому что текущая книга нам уже известна.
-     */
+    // ============================================================
+    // TASK LIST CACHE
+    // ============================================================
+
     private function isStoredTaskListCompatible(
         array $storedTasks
     ): bool {
@@ -133,7 +406,7 @@ class GDZParser
 
             if (
                 !array_key_exists(
-                    'group_name',
+                    'group_id',
                     $storedTask
                 )
             ) {
@@ -158,10 +431,8 @@ class GDZParser
     }
 
     /**
-     * Дописать связь с книгой в сохраненный taskList.
-     *
-     * Также преобразует старое group_order_number
-     * в order_number_in_group.
+     * Дописать book_id и привести старое
+     * group_order_number к order_number_in_group.
      */
     private function normalizeStoredTaskList(
         array $storedTasks,
@@ -202,9 +473,13 @@ class GDZParser
         return $storedTasks;
     }
 
+    // ============================================================
+    // STORED FULL TASK
+    // ============================================================
+
     /**
-     * Обновить связь и группу в уже существующем JSON задачи,
-     * не загружая страницу задачи повторно.
+     * Обновить metadata уже сохраненной задачи
+     * без повторного скачивания страницы.
      */
     private function updateStoredTaskMetadata(
         string $filePath,
@@ -214,49 +489,48 @@ class GDZParser
             return false;
         }
 
-        $json = file_get_contents(
-            $filePath
-        );
+        $json =
+            file_get_contents(
+                $filePath
+            );
 
-        if ($json === false) {
+        if (
+            $json === false
+            || trim($json) === ''
+        ) {
             return false;
         }
 
-        $storedTask = json_decode(
-            $json,
-            true
-        );
-
-        unset($json);
+        try {
+            $storedTask =
+                json_decode(
+                    $json,
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR
+                );
+        } catch (Exception) {
+            return false;
+        }
 
         if (!is_array($storedTask)) {
             return false;
         }
 
-        $expectedBookId =
-            $taskListItem->book_id;
-
-        $expectedGroupName =
-            $taskListItem->group_name;
-
-        $expectedOrderNumber =
-            $taskListItem
-            ->order_number_in_group;
-
-        $currentOrderNumber =
+        $currentOrder =
             $storedTask['order_number_in_group']
             ?? $storedTask['group_order_number']
             ?? null;
 
         $alreadyCorrect =
             ($storedTask['book_id'] ?? null)
-            === $expectedBookId
+            === $taskListItem->book_id
 
-            && ($storedTask['group_name'] ?? null)
-            === $expectedGroupName
+            && ($storedTask['group_id'] ?? null)
+            === $taskListItem->group_id
 
-            && $currentOrderNumber
-            === $expectedOrderNumber
+            && $currentOrder
+            === $taskListItem->order_number_in_group
 
             && array_key_exists(
                 'order_number_in_group',
@@ -264,49 +538,51 @@ class GDZParser
             );
 
         if ($alreadyCorrect) {
-            unset($storedTask);
-
             return false;
         }
 
         $storedTask['book_id'] =
-            $expectedBookId;
+            $taskListItem->book_id;
 
-        $storedTask['group_name'] =
-            $expectedGroupName;
+        $storedTask['group_id'] =
+            $taskListItem->group_id;
 
         $storedTask['order_number_in_group'] =
-            $expectedOrderNumber;
+            $taskListItem->order_number_in_group;
 
-        /*
-         * Старое поле больше не нужно.
-         */
         unset(
             $storedTask['group_order_number']
         );
 
-        $saveStatus = file_put_contents(
-            $filePath,
-            json_encode(
-                $storedTask,
-                JSON_UNESCAPED_UNICODE
-                    | JSON_UNESCAPED_SLASHES
-            )
-        );
+        try {
+            $this->saveJson(
+                $filePath,
+                $storedTask
+            );
+        } catch (Exception) {
+            return false;
+        }
 
-        unset($storedTask);
-
-        return $saveStatus !== false;
+        return true;
     }
+
+    // ============================================================
+    // RUN
+    // ============================================================
 
     public function run(): void
     {
-        $mode = $this->getMode();
+        $mode =
+            $this->getMode();
 
         $startURLsCount =
             count(
                 $this->config->startURLs
             );
+
+        // ========================================================
+        // START INFO
+        // ========================================================
 
         $this->cli->clear();
 
@@ -349,7 +625,8 @@ class GDZParser
         );
 
         $this->cli->output(
-            "<bold>Output folder:</bold>\t {$this->config->parseOutputFolder}"
+            "<bold>Output folder:</bold>\t "
+                . $this->config->parseOutputFolder
         )->br();
 
         if ($this->config->proxy) {
@@ -364,9 +641,9 @@ class GDZParser
                 ->br();
         }
 
-        // ============================================================
-        // Проверки
-        // ============================================================
+        // ========================================================
+        // VALIDATION
+        // ========================================================
 
         if (
             !in_array(
@@ -390,9 +667,7 @@ class GDZParser
 
         if (
             $this->shouldParseBooks()
-            && is_null(
-                $this->bookParserContext
-            )
+            && $this->bookParserContext === null
         ) {
             $this->cli->error(
                 "Book parser must be specified!"
@@ -403,9 +678,7 @@ class GDZParser
 
         if (
             $this->shouldParseTaskLists()
-            && is_null(
-                $this->taskListParserContext
-            )
+            && $this->taskListParserContext === null
         ) {
             $this->cli->error(
                 "Task list parser must be specified!"
@@ -416,9 +689,7 @@ class GDZParser
 
         if (
             $this->shouldParseTaskContents()
-            && is_null(
-                $this->taskParserContext
-            )
+            && $this->taskParserContext === null
         ) {
             $this->cli->error(
                 "Task parser must be specified!"
@@ -436,8 +707,7 @@ class GDZParser
         }
 
         if (
-            empty($this->config
-                ->parseOutputFolder)
+            empty($this->config->parseOutputFolder)
         ) {
             $this->cli->error(
                 "Output folder must be specified!"
@@ -462,14 +732,13 @@ class GDZParser
             return;
         }
 
-        // ============================================================
-        // OUTPUT
-        // ============================================================
+        // ========================================================
+        // OUTPUT FOLDER
+        // ========================================================
 
         if (
             !is_dir(
-                $this->config
-                    ->parseOutputFolder
+                $this->config->parseOutputFolder
             )
         ) {
             if (
@@ -479,29 +748,29 @@ class GDZParser
                     true
                 )
                 && !is_dir(
-                    $this->config
-                        ->parseOutputFolder
+                    $this->config->parseOutputFolder
                 )
             ) {
                 $this->cli->error(
                     "Failed to create folder: "
-                        . $this->config
-                        ->parseOutputFolder
+                        . $this->config->parseOutputFolder
                 );
 
                 return;
             }
         }
 
-        // ============================================================
+        // ========================================================
         // SUBJECTS
-        // ============================================================
+        // ========================================================
 
         if ($mode === 'subjects') {
             $this->cli->br();
 
             $this->cli->output(
-                "<bold><green>Finished parsing at subjects level.</green></bold>"
+                "<bold><green>"
+                    . "Finished parsing at subjects level."
+                    . "</green></bold>"
             );
 
             $this->cli->br();
@@ -509,16 +778,23 @@ class GDZParser
             return;
         }
 
-        // ============================================================
+        // ========================================================
         // BOOKS
-        // ============================================================
+        // ========================================================
 
         $totalBooksCount = 0;
+
         $successStartURLsCount = 0;
+
         $skippedStartURLsCount = 0;
+
+        $failedStartURLsCount = 0;
+
         $startURLsProgress = 0;
 
         $booksList = [];
+
+        $failedStartURLs = [];
 
         if (!$this->config->showLogs) {
             $startURLsProgressBar =
@@ -530,7 +806,8 @@ class GDZParser
 
             $startURLsProgressBar->current(
                 0,
-                "<bold>[0 / {$startURLsCount}]</bold> Parsing books"
+                "<bold>[0 / {$startURLsCount}]</bold> "
+                    . "Parsing books"
             );
         }
 
@@ -541,14 +818,22 @@ class GDZParser
             $currentStartURLProgress =
                 $startURLsProgress + 1;
 
+            $progressPercent =
+                $startURLsCount > 0
+                ? round(
+                    $currentStartURLProgress
+                        / $startURLsCount
+                        * 100
+                )
+                : 0;
+
             $outputStartURLFolderName =
                 Text::generateNamefromURL(
                     $startURL
                 );
 
             $outputStartURLFolderPath =
-                $this->config
-                ->parseOutputFolder
+                $this->config->parseOutputFolder
                 . DIRECTORY_SEPARATOR
                 . $outputStartURLFolderName;
 
@@ -560,104 +845,116 @@ class GDZParser
             $startURLParsedSuccessfully =
                 false;
 
-            /*
-             * Используем кеш только при наличии books.json,
-             * а не просто существующей папки.
-             */
-            if (
-                is_file(
+            // ====================================================
+            // CACHE
+            // ====================================================
+
+            $storedBooks =
+                $this->loadStoredBooks(
                     $booksFilePath
-                )
-            ) {
-                $parsedBooks =
-                    json_decode(
-                        file_get_contents(
-                            $booksFilePath
-                        ),
-                        true
+                );
+
+            if ($storedBooks !== null) {
+                $storedBooksCount =
+                    count(
+                        $storedBooks
                     );
 
-                if (is_array($parsedBooks)) {
-                    foreach (
-                        $parsedBooks
-                        as $book
-                    ) {
-                        if (!is_array($book)) {
-                            continue;
-                        }
+                foreach (
+                    $storedBooks
+                    as $book
+                ) {
+                    $booksList[] = [
+                        'outputPath' =>
+                        $outputStartURLFolderPath,
 
-                        try {
-                            $bookDTO =
-                                BookDTO::fromArray(
-                                    $book
-                                );
-                        } catch (Exception) {
-                            continue;
-                        }
-
-                        $booksList[] = [
-                            'outputPath' =>
-                            $outputStartURLFolderPath,
-
-                            'book' =>
-                            $bookDTO,
-                        ];
-
-                        $totalBooksCount++;
-                    }
-
-                    /*
-                     * Если books.json был старым и без book_id,
-                     * сохраняем его уже в новом формате.
-                     */
-                    $normalizedBooks = array_map(
-                        static fn(array $item) =>
-                        BookDTO::fromArray($item),
-                        array_filter(
-                            $parsedBooks,
-                            'is_array'
-                        )
-                    );
-
-                    file_put_contents(
-                        $booksFilePath,
-                        json_encode(
-                            array_values(
-                                $normalizedBooks
-                            ),
-                            JSON_UNESCAPED_UNICODE
-                                | JSON_UNESCAPED_SLASHES
-                        )
-                    );
-
-                    unset(
-                        $normalizedBooks
-                    );
+                        'book' =>
+                        $book,
+                    ];
                 }
+
+                $totalBooksCount +=
+                    $storedBooksCount;
 
                 $skippedStartURLsCount++;
 
-                unset($parsedBooks);
-            } else {
+                if ($this->config->showLogs) {
+                    $this->cli->output(
+                        "<dim>[{$currentStartURLProgress} / {$startURLsCount}]</dim> "
+                            . "<dim>[{$progressPercent}%]</dim> "
+                            . "Loaded "
+                            . "<green>{$storedBooksCount}</green> "
+                            . "books from cache for "
+                            . "<yellow>{$startURL}</yellow>"
+                    );
+                }
+            }
+
+            // ====================================================
+            // HTTP PARSE
+            // ====================================================
+
+            else {
+                $lastExceptionMessage =
+                    null;
+
                 for (
                     $attempt = 1;
                     $attempt <= $this->config->attempts;
                     $attempt++
                 ) {
                     try {
+                        if ($this->config->showLogs) {
+                            $this->cli->output(
+                                "<dim>[{$currentStartURLProgress} / {$startURLsCount}]</dim> "
+                                    . "<dim>[{$progressPercent}%]</dim> "
+                                    . "Parsing books from "
+                                    . "<yellow>{$startURL}</yellow> "
+                                    . "(attempt {$attempt} "
+                                    . "of {$this->config->attempts})"
+                            );
+                        }
+
+                        /*
+                         * Каждый retry получает следующий прокси.
+                         */
+                        $proxy =
+                            $this->getNextProxy();
+
                         $books =
                             $this->bookParserContext
                             ->parse(
                                 $startURL,
-                                $this->getRandomProxy(),
+                                $proxy,
                                 $this->config->timeout
                             );
 
                         $booksCount =
-                            count($books);
+                            count(
+                                $books
+                            );
 
-                        $totalBooksCount +=
-                            $booksCount;
+                        /*
+                         * Пустой массив не считаем успехом.
+                         *
+                         * Это одна из важных правок.
+                         */
+                        if ($booksCount === 0) {
+                            throw new ParseException(
+                                "No books found on {$startURL}."
+                            );
+                        }
+
+                        /*
+                         * Сначала успешно сохраняем файл.
+                         *
+                         * Только после этого считаем URL
+                         * полностью обработанным.
+                         */
+                        $this->saveJson(
+                            $booksFilePath,
+                            $books
+                        );
 
                         foreach (
                             $books
@@ -672,120 +969,195 @@ class GDZParser
                             ];
                         }
 
-                        if ($booksCount > 0) {
-                            if (
-                                !is_dir(
-                                    $outputStartURLFolderPath
-                                )
-                            ) {
-                                if (
-                                    !mkdir(
-                                        $outputStartURLFolderPath,
-                                        0777,
-                                        true
-                                    )
-                                    && !is_dir(
-                                        $outputStartURLFolderPath
-                                    )
-                                ) {
-                                    $this->cli->error(
-                                        "Failed to create folder: "
-                                            . $outputStartURLFolderPath
-                                    );
-
-                                    return;
-                                }
-                            }
-
-                            file_put_contents(
-                                $booksFilePath,
-                                json_encode(
-                                    $books,
-                                    JSON_UNESCAPED_UNICODE
-                                        | JSON_UNESCAPED_SLASHES
-                                )
-                            );
-                        }
+                        $totalBooksCount +=
+                            $booksCount;
 
                         $startURLParsedSuccessfully =
                             true;
 
-                        unset($books);
+                        $successStartURLsCount++;
+
+                        if ($this->config->showLogs) {
+                            $this->cli->output(
+                                "<bold><green>"
+                                    . "Found {$booksCount} books."
+                                    . "</green></bold>"
+                            );
+                        }
+
+                        unset(
+                            $books,
+                            $proxy
+                        );
 
                         break;
-                    } catch (
-                        AccessDeniedException
-                        | PageNotFoundException
-                        | ParseException
-                        | Exception $ex
-                    ) {
-                        if (
-                            $this->config
-                            ->showLogs
-                        ) {
+                    } catch (Exception $ex) {
+                        $lastExceptionMessage =
+                            $ex->getMessage();
+
+                        if ($this->config->showLogs) {
                             $this->cli
                                 ->red()
                                 ->out(
-                                    $ex->getMessage()
+                                    "Attempt {$attempt} failed: "
+                                        . $lastExceptionMessage
                                 );
+                        }
+
+                        if (
+                            $attempt
+                            < $this->config->attempts
+                        ) {
+                            $this->waitBeforeRetry(
+                                $attempt
+                            );
                         }
                     }
                 }
+
+                // =================================================
+                // FAILED COMPLETELY
+                // =================================================
+
+                if (!$startURLParsedSuccessfully) {
+                    $failedStartURLsCount++;
+
+                    $failedStartURLs[] = [
+                        'url' =>
+                        $startURL,
+
+                        'error' =>
+                        $lastExceptionMessage
+                            ?? 'Unknown error',
+                    ];
+
+                    /*
+                     * Ошибку показываем даже без --logs.
+                     *
+                     * Иначе невозможно понять,
+                     * почему часть классов отсутствует.
+                     */
+                    $this->cli->error(
+                        "FAILED: {$startURL}"
+                            . (
+                                $lastExceptionMessage !== null
+                                ? " — {$lastExceptionMessage}"
+                                : ''
+                            )
+                    );
+                }
             }
 
-            if (
-                $startURLParsedSuccessfully
-            ) {
-                $successStartURLsCount++;
-            }
+            unset(
+                $storedBooks
+            );
 
             $startURLsProgress++;
 
-            if (
-                !$this->config
-                    ->showLogs
-            ) {
+            if (!$this->config->showLogs) {
                 $startURLsProgressBar->current(
                     $startURLsProgress,
-                    "<bold>[{$startURLsProgress} / {$startURLsCount}]</bold> Parsing books"
+                    "<bold>[{$startURLsProgress} / {$startURLsCount}]</bold> "
+                        . "Parsing books"
                 );
             }
 
             unset(
-                $booksFilePath,
                 $outputStartURLFolderName,
-                $outputStartURLFolderPath
+                $outputStartURLFolderPath,
+                $booksFilePath
             );
         }
 
+        // ========================================================
+        // BOOKS SUMMARY
+        // ========================================================
+
+        $this->cli->br();
+
+        $this->cli->output(
+            "<bold>Books parsing summary:</bold>"
+        );
+
+        $this->cli->output(
+            "Total start URLs: {$startURLsCount}"
+        );
+
+        $this->cli->output(
+            "<green>Successfully fetched: "
+                . "{$successStartURLsCount}</green>"
+        );
+
+        $this->cli->output(
+            "<yellow>Loaded from cache: "
+                . "{$skippedStartURLsCount}</yellow>"
+        );
+
+        $this->cli->output(
+            "<cyan>Total books: "
+                . "{$totalBooksCount}</cyan>"
+        );
+
+        if ($failedStartURLsCount > 0) {
+            $this->cli->output(
+                "<red>Failed start URLs: "
+                    . "{$failedStartURLsCount}</red>"
+            );
+
+            foreach (
+                $failedStartURLs
+                as $failed
+            ) {
+                $this->cli->output(
+                    "<red>- {$failed['url']}</red>"
+                );
+
+                $this->cli->output(
+                    "  <dim>{$failed['error']}</dim>"
+                );
+            }
+        } else {
+            $this->cli->output(
+                "<green>Failed start URLs: 0</green>"
+            );
+        }
+
+        $this->cli->br();
+
+        // ========================================================
+        // BOOK MODE DONE
+        // ========================================================
+
         if ($mode === 'books') {
+            $this->cli->output(
+                "<bold><green>"
+                    . "Finished parsing at books level."
+                    . "</green></bold>"
+            );
+
             $this->cli->br();
-
-            $this->cli->output(
-                "<bold><green>Finished parsing books.</green></bold>"
-            );
-
-            $this->cli->output(
-                "Books count: {$totalBooksCount}"
-            );
 
             return;
         }
 
-        // ============================================================
+        // ========================================================
         // TASK LISTS
-        // ============================================================
+        // ========================================================
 
         $tasksItemsList = [];
 
         $taskListProgress = 0;
+
         $totalTasksCount = 0;
+
         $successTasksListCount = 0;
+
         $skippedTasksListCount = 0;
 
+        $failedTaskListsCount = 0;
+
         if (
-            !$this->config
-                ->showLogs
+            !$this->config->showLogs
             && $totalBooksCount > 0
         ) {
             $taskListProgressBar =
@@ -797,7 +1169,8 @@ class GDZParser
 
             $taskListProgressBar->current(
                 0,
-                "<bold>[0 / {$totalBooksCount}]</bold> Parsing task lists"
+                "<bold>[0 / {$totalBooksCount}]</bold> "
+                    . "Parsing task lists"
             );
         }
 
@@ -809,11 +1182,9 @@ class GDZParser
             $book =
                 $bookItem['book'];
 
-            /*
-             * НОВАЯ структура:
-             *
-             * startURL/books/{book_id}/
-             */
+            $currentTaskListProgress =
+                $taskListProgress + 1;
+
             $bookFolderPath =
                 $bookItem['outputPath']
                 . DIRECTORY_SEPARATOR
@@ -829,79 +1200,84 @@ class GDZParser
             $taskListParsedSuccessfully =
                 false;
 
-            $storedTasks = null;
+            $storedTasks =
+                null;
 
-            $useStoredTaskList = false;
+            $useStoredTaskList =
+                false;
 
-            if (
-                is_file(
-                    $taskListFilePath
-                )
-            ) {
-                $storedTasks =
-                    json_decode(
+            // ====================================================
+            // CACHE
+            // ====================================================
+
+            if (is_file($taskListFilePath)) {
+                try {
+                    $content =
                         file_get_contents(
                             $taskListFilePath
-                        ),
-                        true
-                    );
+                        );
+
+                    if (
+                        $content !== false
+                        && trim($content) !== ''
+                    ) {
+                        $storedTasks =
+                            json_decode(
+                                $content,
+                                true,
+                                512,
+                                JSON_THROW_ON_ERROR
+                            );
+                    }
+                } catch (Exception) {
+                    $storedTasks =
+                        null;
+                }
 
                 if (
                     is_array($storedTasks)
+                    && count($storedTasks) > 0
                     && $this
                     ->isStoredTaskListCompatible(
                         $storedTasks
                     )
                 ) {
-                    /*
-                     * book_id не требует повторного
-                     * HTTP-парсинга.
-                     */
                     $storedTasks =
-                        $this
-                        ->normalizeStoredTaskList(
+                        $this->normalizeStoredTaskList(
                             $storedTasks,
                             $book->book_id
                         );
 
-                    file_put_contents(
-                        $taskListFilePath,
-                        json_encode(
-                            $storedTasks,
-                            JSON_UNESCAPED_UNICODE
-                                | JSON_UNESCAPED_SLASHES
-                        )
-                    );
+                    try {
+                        $this->saveJson(
+                            $taskListFilePath,
+                            $storedTasks
+                        );
+                    } catch (Exception $ex) {
+                        if ($this->config->showLogs) {
+                            $this->cli
+                                ->red()
+                                ->out(
+                                    $ex->getMessage()
+                                );
+                        }
+                    }
 
                     $useStoredTaskList =
                         true;
                 }
             }
 
-            // ========================================================
-            // Cached
-            // ========================================================
-
             if ($useStoredTaskList) {
-                $totalTasksCount +=
-                    count(
-                        $storedTasks
-                    );
-
                 foreach (
                     $storedTasks
                     as $taskItem
                 ) {
                     $taskDTO =
-                        TaskListItemDTO
-                        ::fromArray(
+                        TaskListItemDTO::fromArray(
                             $taskItem
                         );
 
-                    /*
-                     * Дополнительная гарантия:
-                     * родитель всегда текущая книга.
-                     */
                     $taskDTO->book_id =
                         $book->book_id;
 
@@ -914,37 +1290,60 @@ class GDZParser
                     ];
                 }
 
+                $totalTasksCount +=
+                    count(
+                        $storedTasks
+                    );
+
                 $skippedTasksListCount++;
             }
 
-            // ========================================================
-            // Parse
-            // ========================================================
+            // ====================================================
+            // PARSE TASK LIST
+            // ====================================================
 
             else {
+                $lastExceptionMessage =
+                    null;
+
                 for (
                     $attempt = 1;
                     $attempt <= $this->config->attempts;
                     $attempt++
                 ) {
                     try {
+                        if ($this->config->showLogs) {
+                            $this->cli->output(
+                                "Parsing task list for "
+                                    . "<yellow>{$book->title}</yellow> "
+                                    . "(attempt {$attempt} "
+                                    . "of {$this->config->attempts})"
+                            );
+                        }
+
                         $tasksItems =
-                            $this
-                            ->taskListParserContext
+                            $this->taskListParserContext
                             ->parse(
                                 $book->url,
-                                $this->getRandomProxy(),
+                                $this->getNextProxy(),
                                 $this->config->timeout
                             );
 
+                        $tasksItemsCount =
+                            count(
+                                $tasksItems
+                            );
+
+                        if ($tasksItemsCount === 0) {
+                            throw new ParseException(
+                                "No tasks found for book {$book->url}."
+                            );
+                        }
+
                         /*
-                         * КЛЮЧЕВОЙ МОМЕНТ.
+                         * Здесь устанавливаем связь:
                          *
-                         * ReshakTaskListParser не должен сам
-                         * угадывать книгу.
-                         *
-                         * GDZParser уже знает родителя,
-                         * поэтому здесь и задаем book_id.
+                         * task -> book
                          */
                         foreach (
                             $tasksItems
@@ -952,7 +1351,23 @@ class GDZParser
                         ) {
                             $task->book_id =
                                 $book->book_id;
+                        }
 
+                        /*
+                         * Сначала сохраняем taskList.
+                         */
+                        $this->saveJson(
+                            $taskListFilePath,
+                            $tasksItems
+                        );
+
+                        /*
+                         * Затем добавляем задачи в общий массив.
+                         */
+                        foreach (
+                            $tasksItems
+                            as $task
+                        ) {
                             $tasksItemsList[] = [
                                 'outputPath' =>
                                 $bookFolderPath,
@@ -962,49 +1377,10 @@ class GDZParser
                             ];
                         }
 
-                        $tasksItemsCount =
-                            count($tasksItems);
-
                         $totalTasksCount +=
                             $tasksItemsCount;
 
-                        if ($tasksItemsCount > 0) {
-                            if (
-                                !is_dir(
-                                    $bookFolderPath
-                                )
-                            ) {
-                                if (
-                                    !mkdir(
-                                        $bookFolderPath,
-                                        0777,
-                                        true
-                                    )
-                                    && !is_dir(
-                                        $bookFolderPath
-                                    )
-                                ) {
-                                    $this->cli->error(
-                                        "Failed to create folder: "
-                                            . $bookFolderPath
-                                    );
-
-                                    return;
-                                }
-                            }
-
-                            /*
-                             * Здесь задачи уже содержат book_id.
-                             */
-                            file_put_contents(
-                                $taskListFilePath,
-                                json_encode(
-                                    $tasksItems,
-                                    JSON_UNESCAPED_UNICODE
-                                        | JSON_UNESCAPED_SLASHES
-                                )
-                            );
-                        }
+                        $successTasksListCount++;
 
                         $taskListParsedSuccessfully =
                             true;
@@ -1012,44 +1388,56 @@ class GDZParser
                         unset($tasksItems);
 
                         break;
-                    } catch (
-                        AccessDeniedException
-                        | PageNotFoundException
-                        | ParseException
-                        | Exception $ex
-                    ) {
-                        if (
-                            $this->config
-                            ->showLogs
-                        ) {
+                    } catch (Exception $ex) {
+                        $lastExceptionMessage =
+                            $ex->getMessage();
+
+                        if ($this->config->showLogs) {
                             $this->cli
                                 ->red()
                                 ->out(
-                                    $ex->getMessage()
+                                    "Attempt {$attempt} failed: "
+                                        . $lastExceptionMessage
                                 );
+                        }
+
+                        if (
+                            $attempt
+                            < $this->config->attempts
+                        ) {
+                            $this->waitBeforeRetry(
+                                $attempt
+                            );
                         }
                     }
                 }
-            }
 
-            if (
-                $taskListParsedSuccessfully
-            ) {
-                $successTasksListCount++;
+                if (!$taskListParsedSuccessfully) {
+                    $failedTaskListsCount++;
+
+                    $this->cli->error(
+                        "FAILED task list: {$book->title}"
+                            . (
+                                $lastExceptionMessage !== null
+                                ? " — {$lastExceptionMessage}"
+                                : ''
+                            )
+                    );
+                }
             }
 
             $taskListProgress++;
 
             if (
-                !$this->config
-                    ->showLogs
+                !$this->config->showLogs
                 && isset(
                     $taskListProgressBar
                 )
             ) {
                 $taskListProgressBar->current(
                     $taskListProgress,
-                    "<bold>[{$taskListProgress} / {$totalBooksCount}]</bold> Parsing task lists"
+                    "<bold>[{$taskListProgress} / {$totalBooksCount}]</bold> "
+                        . "Parsing task lists"
                 );
             }
 
@@ -1061,23 +1449,58 @@ class GDZParser
             );
         }
 
+        // ========================================================
+        // TASK LIST SUMMARY
+        // ========================================================
+
+        $this->cli->br();
+
+        $this->cli->output(
+            "<bold>Task lists summary:</bold>"
+        );
+
+        $this->cli->output(
+            "<cyan>Total tasks: {$totalTasksCount}</cyan>"
+        );
+
+        $this->cli->output(
+            "<green>Successfully parsed task lists: "
+                . "{$successTasksListCount}</green>"
+        );
+
+        $this->cli->output(
+            "<yellow>Loaded task lists from cache: "
+                . "{$skippedTasksListCount}</yellow>"
+        );
+
+        if ($failedTaskListsCount > 0) {
+            $this->cli->output(
+                "<red>Failed task lists: "
+                    . "{$failedTaskListsCount}</red>"
+            );
+        }
+
+        $this->cli->br();
+
+        // ========================================================
+        // TASKS MODE DONE
+        // ========================================================
+
         if ($mode === 'tasks') {
+            $this->cli->output(
+                "<bold><green>"
+                    . "Finished parsing at tasks level."
+                    . "</green></bold>"
+            );
+
             $this->cli->br();
-
-            $this->cli->output(
-                "<bold><green>Finished parsing task lists.</green></bold>"
-            );
-
-            $this->cli->output(
-                "Tasks count: {$totalTasksCount}"
-            );
 
             return;
         }
 
-        // ============================================================
-        // FULL TASKS
-        // ============================================================
+        // ========================================================
+        // FULL TASK CONTENT
+        // ========================================================
 
         if ($totalTasksCount === 0) {
             $this->cli->error(
@@ -1088,8 +1511,13 @@ class GDZParser
         }
 
         $successParsedTasksCount = 0;
+
         $skippedParsedTasksCount = 0;
+
+        $failedParsedTasksCount = 0;
+
         $updatedTaskMetadataCount = 0;
+
         $tasksProgress = 0;
 
         if (!$this->config->showLogs) {
@@ -1102,7 +1530,8 @@ class GDZParser
 
             $tasksProgressBar->current(
                 0,
-                "<bold>[0 / {$totalTasksCount}]</bold> Parsing tasks"
+                "<bold>[0 / {$totalTasksCount}]</bold> "
+                    . "Parsing tasks"
             );
         }
 
@@ -1169,15 +1598,11 @@ class GDZParser
                 . DIRECTORY_SEPARATOR
                 . $outputTaskFileName;
 
-            // ========================================================
-            // Already exists
-            // ========================================================
+            // ====================================================
+            // ALREADY EXISTS
+            // ====================================================
 
-            if (
-                is_file(
-                    $outputTaskFullFileName
-                )
-            ) {
+            if (is_file($outputTaskFullFileName)) {
                 if (
                     $this
                     ->updateStoredTaskMetadata(
@@ -1191,90 +1616,111 @@ class GDZParser
                 $skippedParsedTasksCount++;
             }
 
-            // ========================================================
-            // Parse content
-            // ========================================================
+            // ====================================================
+            // PARSE TASK
+            // ====================================================
 
             else {
+                $taskParsedSuccessfully =
+                    false;
+
+                $lastExceptionMessage =
+                    null;
+
                 for (
                     $attempt = 1;
                     $attempt <= $this->config->attempts;
                     $attempt++
                 ) {
                     try {
+                        if ($this->config->showLogs) {
+                            $this->cli->output(
+                                "Parsing task "
+                                    . "<yellow>{$taskListItem->url}</yellow> "
+                                    . "(attempt {$attempt} "
+                                    . "of {$this->config->attempts})"
+                            );
+                        }
+
                         $taskInfo =
-                            $this
-                            ->taskParserContext
+                            $this->taskParserContext
                             ->parse(
                                 $taskListItem->url,
-                                $this->getRandomProxy(),
+                                $this->getNextProxy(),
                                 $this->config->timeout
                             );
 
-                        /*
-                         * Связь со структурой книги.
-                         */
                         $taskInfo->book_id =
-                            $taskListItem
-                            ->book_id;
+                            $taskListItem->book_id;
 
-                        $taskInfo->group_name =
-                            $taskListItem
-                            ->group_name;
+                        $taskInfo->group_id =
+                            $taskListItem->group_id;
 
                         $taskInfo->order_number_in_group =
                             $taskListItem
                             ->order_number_in_group;
 
-                        $saveStatus =
-                            file_put_contents(
-                                $outputTaskFullFileName,
-                                json_encode(
-                                    $taskInfo,
-                                    JSON_UNESCAPED_UNICODE
-                                        | JSON_UNESCAPED_SLASHES
-                                )
-                            );
+                        $this->saveJson(
+                            $outputTaskFullFileName,
+                            $taskInfo
+                        );
 
-                        if (
-                            $saveStatus
-                            !== false
-                        ) {
-                            $successParsedTasksCount++;
-                        }
+                        $successParsedTasksCount++;
+
+                        $taskParsedSuccessfully =
+                            true;
 
                         unset($taskInfo);
 
                         break;
-                    } catch (
-                        AccessDeniedException
-                        | PageNotFoundException
-                        | ParseException
-                        | Exception $ex
-                    ) {
-                        if (
-                            $this->config
-                            ->showLogs
-                        ) {
+                    } catch (Exception $ex) {
+                        $lastExceptionMessage =
+                            $ex->getMessage();
+
+                        if ($this->config->showLogs) {
                             $this->cli
                                 ->red()
                                 ->out(
-                                    $ex->getMessage()
+                                    "Attempt {$attempt} failed: "
+                                        . $lastExceptionMessage
                                 );
                         }
+
+                        if (
+                            $attempt
+                            < $this->config->attempts
+                        ) {
+                            $this->waitBeforeRetry(
+                                $attempt
+                            );
+                        }
+                    }
+                }
+
+                if (!$taskParsedSuccessfully) {
+                    $failedParsedTasksCount++;
+
+                    if ($this->config->showLogs) {
+                        $this->cli->error(
+                            "FAILED task: "
+                                . $taskListItem->url
+                                . (
+                                    $lastExceptionMessage !== null
+                                    ? " — {$lastExceptionMessage}"
+                                    : ''
+                                )
+                        );
                     }
                 }
             }
 
             $tasksProgress++;
 
-            if (
-                !$this->config
-                    ->showLogs
-            ) {
+            if (!$this->config->showLogs) {
                 $tasksProgressBar->current(
                     $tasksProgress,
-                    "<bold>[{$tasksProgress} / {$totalTasksCount}]</bold> Parsing tasks"
+                    "<bold>[{$tasksProgress} / {$totalTasksCount}]</bold> "
+                        . "Parsing tasks"
                 );
             }
 
@@ -1285,6 +1731,10 @@ class GDZParser
             );
         }
 
+        // ========================================================
+        // FINAL SUMMARY
+        // ========================================================
+
         $this->cli->br();
 
         $this->cli->output(
@@ -1292,21 +1742,26 @@ class GDZParser
         );
 
         $this->cli->output(
-            "<bold><green>Success parsed tasks count:</green></bold> "
-                . $successParsedTasksCount
+            "<green>Success parsed tasks: "
+                . "{$successParsedTasksCount}</green>"
         );
 
         $this->cli->output(
-            "<bold><yellow>Skipped parsed tasks count:</yellow></bold> "
-                . $skippedParsedTasksCount
+            "<yellow>Skipped parsed tasks: "
+                . "{$skippedParsedTasksCount}</yellow>"
         );
 
-        if (
-            $updatedTaskMetadataCount > 0
-        ) {
+        if ($updatedTaskMetadataCount > 0) {
             $this->cli->output(
-                "<bold><cyan>Updated metadata count:</cyan></bold> "
-                    . $updatedTaskMetadataCount
+                "<cyan>Updated task metadata: "
+                    . "{$updatedTaskMetadataCount}</cyan>"
+            );
+        }
+
+        if ($failedParsedTasksCount > 0) {
+            $this->cli->output(
+                "<red>Failed parsed tasks: "
+                    . "{$failedParsedTasksCount}</red>"
             );
         }
 

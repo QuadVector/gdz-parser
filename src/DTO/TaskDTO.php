@@ -12,7 +12,7 @@ final class TaskDTO
 	 * @param string      $url Ссылка
 	 * @param string      $content Содержимое
 	 * @param array       $images Массив изображений в Base64
-	 * @param string|null $group_name Группа задачи
+	 * @param string|null $group_id Группа задачи
 	 * @param int|null    $order_number_in_group Позиция внутри группы
 	 */
 	public function __construct(
@@ -20,7 +20,7 @@ final class TaskDTO
 		public string $url,
 		public string $content,
 		public array $images,
-		public ?string $group_name = null,
+		public ?string $group_id = null,
 		public ?int $order_number_in_group = null
 	) {}
 
@@ -40,8 +40,8 @@ final class TaskDTO
 				? $data['images']
 				: [],
 
-			group_name: isset($data['group_name'])
-				? trim((string)$data['group_name'])
+			group_id: isset($data['group_id'])
+				? trim((string)$data['group_id'])
 				: null,
 
 			order_number_in_group: isset($data['order_number_in_group'])

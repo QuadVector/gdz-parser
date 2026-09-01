@@ -11,7 +11,7 @@ final class TaskListItemDTO
 		public string $title,
 		public string $url,
 		public ?string $chapter = null,
-		public ?string $group_name = null,
+		public ?string $group_id = null,
 		public ?int $order_number_in_group = null,
 		public ?string $book_id = null
 	) {}
@@ -45,9 +45,9 @@ final class TaskListItemDTO
 				)
 				: null,
 
-			group_name: isset($data['group_name'])
+			group_id: isset($data['group_id'])
 				? trim(
-					(string)$data['group_name']
+					(string)$data['group_id']
 				)
 				: null,
 

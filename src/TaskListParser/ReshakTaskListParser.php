@@ -305,7 +305,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 						chapter: $currentChapter,
 
-						group_name: $groupName,
+						group_id: $groupName,
 
 						order_number_in_group: $groupOrderNumber
 					);
@@ -655,7 +655,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 				chapter: $chapter,
 
-				group_name: $groupName,
+				group_id: $groupName,
 
 				order_number_in_group: $groupName !== null
 					? $groupOrderNumber
