@@ -3,50 +3,53 @@
 namespace QuadVector\GDZParser\DTO;
 
 /**
- * DTO-класс с информацией о задаче.
+ * DTO с полной информацией о задаче.
  */
 final class TaskDTO
 {
-	/**
-	 * @param string      $title Название задачи
-	 * @param string      $url Ссылка
-	 * @param string      $content Содержимое
-	 * @param array       $images Массив изображений в Base64
-	 * @param string|null $group_id Группа задачи
-	 * @param int|null    $order_number_in_group Позиция внутри группы
-	 */
 	public function __construct(
 		public string $title,
 		public string $url,
 		public string $content,
 		public array $images,
 		public ?string $group_id = null,
-		public ?int $order_number_in_group = null
-	) {}
+		public ?int $order_number_in_group = null,
+		public ?string $book_id = null,
+		public ?string $parse_url = null
+	) {
+	}
 
-	/**
-	 * Создать объект из ассоциативного массива.
-	 */
 	public static function fromArray(array $data): self
 	{
+		$orderNumber =
+			$data['order_number_in_group']
+			?? $data['group_order_number']
+			?? null;
+
 		return new self(
 			title: trim((string)($data['title'] ?? '')),
-
 			url: trim((string)($data['url'] ?? '')),
-
 			content: trim((string)($data['content'] ?? '')),
-
 			images: is_array($data['images'] ?? null)
 				? $data['images']
 				: [],
-
-			group_id: isset($data['group_id'])
-				? trim((string)$data['group_id'])
+			group_id: self::normalizeNullableString(
+				$data['group_id']
+				?? $data['group_name']
+				?? null
+			),
+			order_number_in_group: $orderNumber !== null
+				? (int)$orderNumber
 				: null,
-
-			order_number_in_group: isset($data['order_number_in_group'])
-				? (int)$data['order_number_in_group']
-				: null
+			book_id: self::normalizeNullableString($data['book_id'] ?? null),
+			parse_url: self::normalizeNullableString($data['parse_url'] ?? null)
 		);
+	}
+
+	private static function normalizeNullableString(mixed $value): ?string
+	{
+		$value = trim((string)($value ?? ''));
+
+		return $value !== '' ? $value : null;
 	}
 }

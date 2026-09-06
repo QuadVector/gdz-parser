@@ -21,24 +21,15 @@ class ReshakTaskParser implements TaskParserInterface
 		private bool $parseImages = true
 	) {}
 
-	/**
-	 * Сделать ссылку абсолютной.
-	 */
-	private function makeAbsoluteURL(
-		string $href
-	): string {
+	private function makeAbsoluteURL(string $href): string
+	{
 		$href = trim($href);
 
 		if ($href === '') {
 			return '';
 		}
 
-		if (
-			preg_match(
-				'#^https?://#i',
-				$href
-			)
-		) {
+		if (preg_match('#^https?://#i', $href)) {
 			return $href;
 		}
 
@@ -48,47 +39,39 @@ class ReshakTaskParser implements TaskParserInterface
 			. ltrim($href, '/');
 	}
 
-	/**
-	 * Получить информацию о задаче.
-	 */
 	public function parse(
 		string $url = '',
 		?Proxy $proxy = null,
 		?int $timeout = null
 	): TaskDTO {
-		$url = Text::makeAbsoluteURL(
-			self::DOMAIN,
-			$url
-		);
+		$url = Text::makeAbsoluteURL(self::DOMAIN, $url);
 
 		$resultTitle = '';
 		$resultContent = '';
 		$resultImages = [];
 
-		// =====================================================
-		// Ссылка непосредственно на картинку
-		// =====================================================
-
 		if (CURL::isURLImage($url)) {
-			/*
-             * При parse_images=false ничего не скачиваем.
-             */
 			if ($this->parseImages) {
 				try {
-					$imageObject =
-						Base64Image::fromURL(
-							$url,
-							$proxy,
-							$timeout
-						);
+					$imageObject = Base64Image::fromURL(
+						$url,
+						$proxy,
+						$timeout
+					);
 
-					$resultImages[] =
-						$imageObject->getBase64();
+					$resultImages[] = $imageObject->getBase64();
 
 					unset($imageObject);
 				} catch (Exception $e) {
-					error_log(
-						$e->getMessage()
+					/*
+					 * У image task нет другого содержимого. Ошибка загрузки
+					 * должна попасть во внешний retry, а не закешироваться
+					 * как успешная пустая задача.
+					 */
+					throw new ParseException(
+						"Can't load image task {$url}: " . $e->getMessage(),
+						0,
+						$e
 					);
 				}
 			}
@@ -97,121 +80,78 @@ class ReshakTaskParser implements TaskParserInterface
 				title: $resultTitle,
 				url: $url,
 				content: $resultContent,
-				images: $resultImages
+				images: $resultImages,
+				parse_url: $url
 			);
 		}
 
-		// =====================================================
-		// Обычная HTML-страница задачи
-		// =====================================================
-
-		$html = CURL::fileGetContents(
-			$url,
-			$proxy,
-			$timeout
-		);
+		$html = CURL::fileGetContents($url, $proxy, $timeout);
 
 		if (!$html) {
-			throw new PageNotFoundException(
-				"Can't open {$url}."
-			);
+			throw new PageNotFoundException("Can't open {$url}.");
 		}
 
 		if ($html === 'Access Denied') {
-			throw new AccessDeniedException(
-				"Access denied for {$url}"
-			);
+			throw new AccessDeniedException("Access denied for {$url}");
 		}
 
-		$dom = HtmlDomParser::str_get_html(
-			$html
-		);
-
+		$dom = HtmlDomParser::str_get_html($html);
 		unset($html);
 
 		if (!$dom) {
-			throw new ParseException(
-				"Can't parse {$url}."
-			);
+			throw new ParseException("Can't parse {$url}.");
 		}
 
-		$article = $dom->findOneOrFalse(
-			'article.lcol'
-		);
+		$article = $dom->findOneOrFalse('article.lcol');
 
 		if (!$article) {
 			unset($dom);
 
-			throw new ParseException(
-				"Can't find article.lcol on {$url}."
-			);
+			throw new ParseException("Can't find article.lcol on {$url}.");
 		}
 
-		// =====================================================
-		// Заголовок
-		// =====================================================
-
-		$resultTitleNode =
-			$article->findOneOrFalse(
-				'.titleh1'
-			);
+		$resultTitleNode = $article->findOneOrFalse('.titleh1');
 
 		if ($resultTitleNode) {
-			$resultTitle =
-				Text::cleanupText(
-					strip_tags(
-						$resultTitleNode->innerText()
-					)
-				);
+			$resultTitle = Text::cleanupText(
+				strip_tags($resultTitleNode->innerText())
+			);
 
 			unset($resultTitleNode);
 		}
 
-		// =====================================================
-		// Текст решения
-		// =====================================================
+		$resultContentNode = $article->findOneOrFalse('.text_zad');
 
-		$resultContentNode =
-			$article->findOneOrFalse(
-				'.text_zad'
-			);
-
+		// получаем и обрабатываем содержимое исходного текста задачи
 		if ($resultContentNode) {
-			$resultContent =
-				Text::cleanupText(
-					strip_tags(
-						$resultContentNode->innerText()
-					)
+			$resultContent = $resultContentNode->innerText();
+
+			// очищаем рекламные описания
+			if (preg_match('/решак|reshak/ui', $resultContent)) {
+				$resultContent = "";
+			} else {
+				$resultContent = Text::cleanupText(
+					strip_tags($resultContent)
 				);
+			}
 
 			unset($resultContentNode);
 		}
 
-		// =====================================================
-		// Изображения
-		// =====================================================
-
 		if ($this->parseImages) {
-			$resultImagesNodes =
-				$article->findMultiOrFalse(
-					"div[class*='pic_otvet'] img"
-				);
+			$resultImagesNodes = $article->findMultiOrFalse(
+				"div[class*='pic_otvet'] img"
+			);
 
 			if ($resultImagesNodes) {
-				foreach (
-					$resultImagesNodes as $image
-				) {
+				foreach ($resultImagesNodes as $image) {
 					$imageURL = trim(
-						(string)$image->getAttribute(
-							'src'
-						)
+						(string)$image->getAttribute('src')
 					);
 
 					if ($imageURL === '') {
 						$imageURL = trim(
-							(string)$image->getAttribute(
-								'data-src'
-							)
+							(string)$image->getAttribute('data-src')
 						);
 					}
 
@@ -219,31 +159,24 @@ class ReshakTaskParser implements TaskParserInterface
 						continue;
 					}
 
-					$imageURL =
-						$this->makeAbsoluteURL(
-							$imageURL
-						);
+					$imageURL = $this->makeAbsoluteURL($imageURL);
 
 					if ($imageURL === '') {
 						continue;
 					}
 
 					try {
-						$imageObject =
-							Base64Image::fromURL(
-								$imageURL,
-								$proxy,
-								$timeout
-							);
+						$imageObject = Base64Image::fromURL(
+							$imageURL,
+							$proxy,
+							$timeout
+						);
 
-						$resultImages[] =
-							$imageObject->getBase64();
+						$resultImages[] = $imageObject->getBase64();
 
 						unset($imageObject);
 					} catch (Exception $e) {
-						error_log(
-							$e->getMessage()
-						);
+						error_log($e->getMessage());
 					}
 
 					unset($imageURL);
@@ -253,20 +186,28 @@ class ReshakTaskParser implements TaskParserInterface
 			unset($resultImagesNodes);
 		}
 
-		unset(
-			$article,
-			$dom
-		);
+		unset($article, $dom);
 
 		if (function_exists('gc_collect_cycles')) {
 			gc_collect_cycles();
+		}
+
+		if (
+			$resultTitle === ''
+			&& $resultContent === ''
+			&& $resultImages === []
+		) {
+			throw new ParseException(
+				"Task page contains no parsed content: {$url}."
+			);
 		}
 
 		return new TaskDTO(
 			title: $resultTitle,
 			url: $url,
 			content: $resultContent,
-			images: $resultImages
+			images: $resultImages,
+			parse_url: $url
 		);
 	}
 }

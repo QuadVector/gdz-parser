@@ -303,7 +303,7 @@ final class Text
             $segments = array_filter(
                 $segments,
                 static fn($segment): bool =>
-                    $segment !== ''
+                $segment !== ''
             );
 
             $path = implode(
@@ -314,11 +314,11 @@ final class Text
 
         $result = trim(
             $host
-            . (
-                $path !== ''
+                . (
+                    $path !== ''
                     ? '/' . $path
                     : ''
-            ),
+                ),
             '/'
         );
 
@@ -373,6 +373,12 @@ final class Text
         $domain = trim($domain);
         $href = trim($href);
 
+        $href = str_replace(
+            ["\r", "\n", "\t", ' '],
+            '',
+            $href
+        );
+
         if ($href === '') {
             return '';
         }
@@ -408,7 +414,7 @@ final class Text
         string $name
     ): string {
         $extension = '.json';
-        $maxLength = 255;
+        $maxLength = 220;
 
         if (strlen($name) <= $maxLength) {
             return $name;

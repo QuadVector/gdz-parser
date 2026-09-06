@@ -122,7 +122,11 @@ final class CURL
 		);
 
 		if ($data === false) {
-			return false;
+			throw new \RuntimeException(
+				'cURL error ' . curl_errno(self::$ch)
+					. ': ' . curl_error(self::$ch)
+					. " for {$url}"
+			);
 		}
 
 		$httpCode = (int)curl_getinfo(
@@ -134,9 +138,10 @@ final class CURL
 			$httpCode >= 400
 			|| $httpCode === 0
 		) {
-			return false;
+			throw new \RuntimeException(
+				"HTTP {$httpCode} for {$url}"
+			);
 		}
-
 		// ============================================================
 		// ENCODING
 		// ============================================================

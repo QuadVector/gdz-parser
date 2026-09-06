@@ -15,7 +15,8 @@ final class BookDTO
 		public string $grade,
 		public string $subject,
 		public string $url,
-		public string $book_id = ''
+		public string $book_id = '',
+		public ?string $parse_url = null
 	) {
 		$this->title = trim($this->title);
 		$this->author = trim($this->author);
@@ -23,68 +24,30 @@ final class BookDTO
 		$this->subject = trim($this->subject);
 		$this->url = trim($this->url);
 		$this->book_id = trim($this->book_id);
+		$this->parse_url = self::normalizeNullableString($this->parse_url);
 
-		/*
-         * Если ID явно не передан —
-         * генерируем его из URL.
-         */
-		if (
-			$this->book_id === ''
-			&& $this->url !== ''
-		) {
-			$this->book_id =
-				Text::generateBookId(
-					$this->url
-				);
+		if ($this->book_id === '' && $this->url !== '') {
+			$this->book_id = Text::generateBookId($this->url);
 		}
 	}
 
-	/**
-	 * Создать объект из массива.
-	 */
 	public static function fromArray(array $data): self
 	{
-		$url = trim(
-			(string)($data['url'] ?? '')
-		);
-
-		$bookId = trim(
-			(string)($data['book_id'] ?? '')
-		);
-
-		/*
-         * Поддержка старых books.json.
-         */
-		if (
-			$bookId === ''
-			&& $url !== ''
-		) {
-			$bookId =
-				Text::generateBookId(
-					$url
-				);
-		}
-
 		return new self(
-			title: trim(
-				(string)($data['title'] ?? '')
-			),
-
-			author: trim(
-				(string)($data['author'] ?? '')
-			),
-
-			grade: trim(
-				(string)($data['grade'] ?? '')
-			),
-
-			subject: trim(
-				(string)($data['subject'] ?? '')
-			),
-
-			url: $url,
-
-			book_id: $bookId
+			title: trim((string)($data['title'] ?? '')),
+			author: trim((string)($data['author'] ?? '')),
+			grade: trim((string)($data['grade'] ?? '')),
+			subject: trim((string)($data['subject'] ?? '')),
+			url: trim((string)($data['url'] ?? '')),
+			book_id: trim((string)($data['book_id'] ?? '')),
+			parse_url: self::normalizeNullableString($data['parse_url'] ?? null)
 		);
+	}
+
+	private static function normalizeNullableString(mixed $value): ?string
+	{
+		$value = trim((string)($value ?? ''));
+
+		return $value !== '' ? $value : null;
 	}
 }

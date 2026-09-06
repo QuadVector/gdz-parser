@@ -159,6 +159,7 @@ $inputOptions = getopt(
     ]
 );
 
+
 // ============================================================
 // LOGS
 // ============================================================
@@ -172,7 +173,7 @@ $inputOptions = getopt(
  *
  * LOGS=true
  */
-if (isset($inputOptions['logs'])) {
+if (array_key_exists('logs', $inputOptions)) {
     $showLogs = true;
 } else {
     $showLogs = $parseBoolean(

@@ -98,6 +98,23 @@ class ReshakTaskListParser implements TaskListParserInterface
 			);
 		}
 
+		/*
+         * Последняя страховка: наружу никогда не возвращаются задачи с
+         * пустыми group_id/order_number_in_group. Одновременно заново
+         * выстраиваем порядок внутри каждой группы по позиции в результате.
+         */
+		$result = $this->ensureTaskGrouping(
+			$result
+		);
+
+		/*
+		 * parse_url указывает на страницу книги, из которой был получен
+		 * конкретный элемент списка задач.
+		 */
+		foreach ($result as $task) {
+			$task->parse_url = $url;
+		}
+
 		unset($article, $dom);
 
 		if (function_exists('gc_collect_cycles')) {
@@ -121,28 +138,16 @@ class ReshakTaskListParser implements TaskListParserInterface
 		$result = [];
 
 		$currentChapter = null;
-
-		/*
-         * Родительская глава.
-         *
-         * Например:
-         *
-         * Часть 1
-         * Глава 1
-         *
-         * => Часть 1 Глава 1
-         */
-		$parentChapter = null;
-
-		/*
-         * Последний subtitle.
-         */
-		$lastSubtitleTitle = null;
-
-		/*
-         * Предыдущий значимый элемент был subtitle.
-         */
-		$lastElementWasSubtitle = false;
+		$chapterLevels = [
+			1 => null,
+			2 => null,
+			3 => null,
+		];
+		$chapterCounters = [
+			1 => 0,
+			2 => 0,
+			3 => 0,
+		];
 
 		/*
          * Глобальный номер razdel на странице.
@@ -189,52 +194,30 @@ class ReshakTaskListParser implements TaskListParserInterface
 					continue;
 				}
 
-				/*
-                 * Два subtitle подряд:
-                 *
-                 * Часть 1
-                 * Глава 1
-                 *
-                 * Первый становится родителем.
-                 */
-				if (
-					$lastElementWasSubtitle
-					&& $lastSubtitleTitle !== null
-					&& $lastSubtitleTitle !== ''
-				) {
-					$parentChapter = $lastSubtitleTitle;
-
-					$currentChapter =
-						$this->makeNestedChapterTitle(
-							$parentChapter,
-							$subtitleTitle
-						);
-				}
+				$subtitleLevel = $this->detectSubtitleLevel($child);
+				$chapterCounters[$subtitleLevel]++;
+				$chapterLevels[$subtitleLevel] = [
+					'number' => $chapterCounters[$subtitleLevel],
+					'title' => $subtitleTitle,
+				];
 
 				/*
-                 * Родитель уже существует.
-                 */ elseif (
-					$parentChapter !== null
-					&& $parentChapter !== ''
-				) {
-					$currentChapter =
-						$this->makeNestedChapterTitle(
-							$parentChapter,
-							$subtitleTitle
-						);
+				 * При смене родителя все более мелкие уровни и их локальные
+				 * счётчики начинаются заново.
+				 */
+				for ($level = $subtitleLevel + 1; $level <= 3; $level++) {
+					$chapterLevels[$level] = null;
+					$chapterCounters[$level] = 0;
 				}
 
-				/*
-                 * Обычная глава.
-                 */ else {
-					$currentChapter = $subtitleTitle;
-				}
-
-				$lastSubtitleTitle = $subtitleTitle;
-				$lastElementWasSubtitle = true;
+				$currentChapter = $this->makeHierarchicalChapterTitle(
+					$chapterLevels
+				);
 
 				unset(
 					$subtitleTitle,
+					$subtitleLevel,
+					$level,
 					$classAttr,
 					$classList
 				);
@@ -330,13 +313,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 					);
 				}
 
-				/*
-                 * Сбрасываем состояние двух subtitle подряд
-                 * только если в razdel действительно были задачи.
-                 */
-				if ($hasParsedTasks) {
-					$lastElementWasSubtitle = false;
-				} else {
+				if (!$hasParsedTasks) {
 					/*
                      * Некоторые служебные div.razdel не содержат ни одной
                      * ссылки на задачу. Они не должны создавать пропуск в
@@ -361,9 +338,8 @@ class ReshakTaskListParser implements TaskListParserInterface
 
 		unset(
 			$currentChapter,
-			$parentChapter,
-			$lastSubtitleTitle,
-			$lastElementWasSubtitle,
+			$chapterLevels,
+			$chapterCounters,
 			$groupCounter
 		);
 
@@ -814,6 +790,158 @@ class ReshakTaskListParser implements TaskListParserInterface
 	}
 
 	/**
+	 * Гарантирует корректную группу и последовательный порядок каждой задачи.
+	 *
+	 * Порядок пересчитывается по текущей позиции элементов, поэтому он не
+	 * зависит от того, является title числом, буквой или произвольным словом.
+	 *
+	 * @param TaskListItemDTO[] $tasks
+	 *
+	 * @return TaskListItemDTO[]
+	 */
+	private function ensureTaskGrouping(array $tasks): array
+	{
+		$result = [];
+		$orderByGroup = [];
+
+		foreach ($tasks as $task) {
+			$groupName = isset($task->group_id)
+				? trim((string)$task->group_id)
+				: '';
+
+			if (!preg_match('/^razdel_[1-9]\d*$/', $groupName)) {
+				$groupName = 'razdel_1';
+			}
+
+			$orderByGroup[$groupName] =
+				($orderByGroup[$groupName] ?? 0) + 1;
+			$orderNumber = $orderByGroup[$groupName];
+			$currentOrder = filter_var(
+				$task->order_number_in_group ?? null,
+				FILTER_VALIDATE_INT,
+				[
+					'options' => [
+						'min_range' => 1,
+					],
+				]
+			);
+
+			if (
+				isset($task->group_id)
+				&& trim((string)$task->group_id) === $groupName
+				&& $currentOrder === $orderNumber
+			) {
+				$result[] = $task;
+
+				continue;
+			}
+
+			$result[] = new TaskListItemDTO(
+				title: (string)$task->title,
+
+				url: (string)$task->url,
+
+				chapter: isset($task->chapter)
+					? (string)$task->chapter
+					: null,
+
+				group_id: $groupName,
+
+				order_number_in_group: $orderNumber
+			);
+		}
+
+		unset($orderByGroup);
+
+		return $result;
+	}
+
+	/**
+	 * Проверяет, можно ли безопасно пропустить уже сохраненный taskList.json.
+	 *
+	 * Если метод вернул false, страницу нужно распарсить заново и перезаписать
+	 * файл. Проверяются не только null, но также формат razdel_N и непрерывный
+	 * порядок 1..N внутри каждой группы.
+	 */
+	public static function isTaskListFileValid(string $filePath): bool
+	{
+		if (!is_file($filePath) || !is_readable($filePath)) {
+			return false;
+		}
+
+		$content = file_get_contents($filePath);
+
+		if (!is_string($content) || trim($content) === '') {
+			return false;
+		}
+
+		try {
+			$decoded = json_decode(
+				$content,
+				true,
+				512,
+				JSON_THROW_ON_ERROR
+			);
+		} catch (\JsonException) {
+			return false;
+		}
+
+		if (!is_array($decoded)) {
+			return false;
+		}
+
+		/* Поддерживаем как чистый массив, так и обертки tasks/data. */
+		if (isset($decoded['tasks']) && is_array($decoded['tasks'])) {
+			$tasks = $decoded['tasks'];
+		} elseif (isset($decoded['data']) && is_array($decoded['data'])) {
+			$tasks = $decoded['data'];
+		} else {
+			$tasks = $decoded;
+		}
+
+		if ($tasks === []) {
+			return false;
+		}
+
+		$expectedOrderByGroup = [];
+
+		foreach ($tasks as $task) {
+			if (!is_array($task)) {
+				return false;
+			}
+
+			$url = trim((string)($task['url'] ?? ''));
+			$groupName = trim((string)($task['group_id'] ?? ''));
+			$order = filter_var(
+				$task['order_number_in_group'] ?? null,
+				FILTER_VALIDATE_INT,
+				[
+					'options' => [
+						'min_range' => 1,
+					],
+				]
+			);
+
+			if (
+				$url === ''
+				|| !preg_match('/^razdel_[1-9]\d*$/', $groupName)
+				|| $order === false
+			) {
+				return false;
+			}
+
+			$expectedOrderByGroup[$groupName] =
+				($expectedOrderByGroup[$groupName] ?? 0) + 1;
+
+			if ($order !== $expectedOrderByGroup[$groupName]) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Проверка ссылки на задачу.
 	 */
 	private function isTaskHref(string $href): bool
@@ -893,41 +1021,74 @@ class ReshakTaskListParser implements TaskListParserInterface
 	}
 
 	/**
-	 * Формирование вложенной главы.
+	 * Определить уровень subtitle старого формата.
 	 *
-	 * Часть 1 + Глава 1
-	 * =>
-	 * Часть 1 Глава 1
+	 * align="center" или text-align:center — h1;
+	 * обычный subtitle — h2;
+	 * subtitle с font-size до 16px — h3.
 	 */
-	private function makeNestedChapterTitle(
-		?string $parentChapter,
-		?string $childChapter
-	): ?string {
-		$parentChapter =
-			$parentChapter !== null
-			? trim($parentChapter)
-			: '';
-
-		$childChapter =
-			$childChapter !== null
-			? trim($childChapter)
-			: '';
+	private function detectSubtitleLevel(object $subtitle): int
+	{
+		$align = strtolower(trim((string)(
+			$subtitle->getAttribute('align') ?? ''
+		)));
+		$style = strtolower((string)(
+			$subtitle->getAttribute('style') ?? ''
+		));
 
 		if (
-			$parentChapter !== ''
-			&& $childChapter !== ''
+			$align === 'center'
+			|| preg_match('/(?:^|;)\s*text-align\s*:\s*center\b/i', $style)
 		) {
-			return $parentChapter
-				. ' '
-				. $childChapter;
+			return 1;
 		}
 
-		if ($childChapter !== '') {
-			return $childChapter;
+		if (
+			preg_match(
+				'/(?:^|;)\s*font-size\s*:\s*([0-9]+(?:\.[0-9]+)?)px\b/i',
+				$style,
+				$fontSizeMatch
+			)
+			&& (float)$fontSizeMatch[1] <= 16
+		) {
+			return 3;
 		}
 
-		return $parentChapter !== ''
-			? $parentChapter
+		return 2;
+	}
+
+	/**
+	 * Собрать chapter из активных уровней и их порядковых номеров.
+	 *
+	 * {{1}}<h1>Часть 1</h1> || {{1}}<h2>Глава 1</h2>
+	 * || {{1}}<h3>Дополнительные задачи (2022)</h3>
+	 */
+	private function makeHierarchicalChapterTitle(array $chapterLevels): ?string
+	{
+		$parts = [];
+
+		foreach ([1, 2, 3] as $level) {
+			$chapter = $chapterLevels[$level] ?? null;
+
+			if (!is_array($chapter)) {
+				continue;
+			}
+
+			$title = trim((string)($chapter['title'] ?? ''));
+			$number = (int)($chapter['number'] ?? 0);
+
+			if ($title === '' || $number < 1) {
+				continue;
+			}
+
+			$parts[] = '{{' . $number . '}}'
+				. '<h' . $level . '>'
+				. $title
+				. '</h' . $level . '>';
+		}
+
+		return $parts !== []
+			? implode(' || ', $parts)
 			: null;
 	}
 }

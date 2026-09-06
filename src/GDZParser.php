@@ -296,8 +296,15 @@ class GDZParser
      * @return BookDTO[]|null
      */
     private function loadStoredBooks(
-        string $booksFilePath
+        string $booksFilePath,
+        string $parseUrl
     ): ?array {
+        $parseUrl = trim($parseUrl);
+
+        if ($parseUrl === '') {
+            return null;
+        }
+
         if (!is_file($booksFilePath)) {
             return null;
         }
@@ -356,6 +363,13 @@ class GDZParser
                     return null;
                 }
 
+                /*
+                 * Старый books.json можно дополнить без HTTP: его папка
+                 * однозначно соответствует текущему стартовому URL.
+                 */
+                $bookData['parse_url'] =
+                    $parseUrl;
+
                 $books[] =
                     BookDTO::fromArray(
                         $bookData
@@ -371,7 +385,7 @@ class GDZParser
 
         /*
          * Заодно перезаписываем старый books.json
-         * в новом формате с book_id.
+         * в новом формате с book_id и parse_url.
          */
         try {
             $this->saveJson(
@@ -399,29 +413,69 @@ class GDZParser
     private function isStoredTaskListCompatible(
         array $storedTasks
     ): bool {
+        if ($storedTasks === []) {
+            return false;
+        }
+
+        $expectedOrderByGroup = [];
+
         foreach ($storedTasks as $storedTask) {
             if (!is_array($storedTask)) {
                 return false;
             }
 
-            if (
-                !array_key_exists(
-                    'group_id',
-                    $storedTask
+            $url = trim(
+                (string)(
+                    $storedTask['url']
+                    ?? ''
                 )
+            );
+
+            if ($url === '') {
+                return false;
+            }
+
+            $groupId = trim(
+                (string)(
+                    $storedTask['group_id']
+                    ?? ''
+                )
+            );
+
+            if (
+                preg_match(
+                    '/^razdel_[1-9]\d*$/',
+                    $groupId
+                ) !== 1
             ) {
                 return false;
             }
 
+            $orderNumber =
+                $storedTask['order_number_in_group']
+                ?? $storedTask['group_order_number']
+                ?? null;
+
+            if (is_int($orderNumber)) {
+                $orderNumberAsInt =
+                    $orderNumber;
+            } elseif (
+                is_string($orderNumber)
+                && ctype_digit($orderNumber)
+            ) {
+                $orderNumberAsInt =
+                    (int)$orderNumber;
+            } else {
+                return false;
+            }
+
+            $expectedOrderByGroup[$groupId] =
+                ($expectedOrderByGroup[$groupId] ?? 0)
+                + 1;
+
             if (
-                !array_key_exists(
-                    'order_number_in_group',
-                    $storedTask
-                )
-                && !array_key_exists(
-                    'group_order_number',
-                    $storedTask
-                )
+                $orderNumberAsInt
+                !== $expectedOrderByGroup[$groupId]
             ) {
                 return false;
             }
@@ -431,12 +485,62 @@ class GDZParser
     }
 
     /**
+     * Последняя страховка после любого парсера списка задач:
+     * group_id всегда имеет формат razdel_N, а порядок считается
+     * по фактическому порядку задач в полученном массиве.
+     *
+     * @param TaskListItemDTO[] $tasks
+     *
+     * @return TaskListItemDTO[]
+     */
+    private function normalizeParsedTaskListGrouping(
+        array $tasks
+    ): array {
+        $orderByGroup = [];
+
+        foreach ($tasks as $task) {
+            if (!$task instanceof TaskListItemDTO) {
+                continue;
+            }
+
+            $groupId = trim(
+                (string)(
+                    $task->group_id
+                    ?? ''
+                )
+            );
+
+            if (
+                preg_match(
+                    '/^razdel_[1-9]\d*$/',
+                    $groupId
+                ) !== 1
+            ) {
+                $groupId = 'razdel_1';
+            }
+
+            $orderByGroup[$groupId] =
+                ($orderByGroup[$groupId] ?? 0)
+                + 1;
+
+            $task->group_id =
+                $groupId;
+
+            $task->order_number_in_group =
+                $orderByGroup[$groupId];
+        }
+
+        return $tasks;
+    }
+
+    /**
      * Дописать book_id и привести старое
      * group_order_number к order_number_in_group.
      */
     private function normalizeStoredTaskList(
         array $storedTasks,
-        string $bookId
+        string $bookId,
+        string $parseUrl
     ): array {
         foreach (
             $storedTasks
@@ -448,6 +552,13 @@ class GDZParser
 
             $storedTask['book_id'] =
                 $bookId;
+
+            /*
+             * Источник списка задач известен из родительской книги,
+             * поэтому старый кеш дополняется без сетевого запроса.
+             */
+            $storedTask['parse_url'] =
+                $parseUrl;
 
             if (
                 !array_key_exists(
@@ -481,12 +592,12 @@ class GDZParser
      * Обновить metadata уже сохраненной задачи
      * без повторного скачивания страницы.
      */
-    private function updateStoredTaskMetadata(
+    private function normalizeStoredTaskMetadata(
         string $filePath,
         TaskListItemDTO $taskListItem
-    ): bool {
+    ): ?bool {
         if (!is_file($filePath)) {
-            return false;
+            return null;
         }
 
         $json =
@@ -498,7 +609,7 @@ class GDZParser
             $json === false
             || trim($json) === ''
         ) {
-            return false;
+            return null;
         }
 
         try {
@@ -510,17 +621,53 @@ class GDZParser
                     JSON_THROW_ON_ERROR
                 );
         } catch (Exception) {
-            return false;
+            return null;
         }
 
         if (!is_array($storedTask)) {
-            return false;
+            return null;
+        }
+
+        /*
+         * Не принимаем за готовый кеш обрезанный/частично записанный JSON.
+         * Для image task пустые title/content допустимы, но сами ключи и
+         * массив images должны присутствовать.
+         */
+        foreach (
+            [
+                'title',
+                'url',
+                'content',
+                'images',
+            ]
+            as $requiredKey
+        ) {
+            if (!array_key_exists($requiredKey, $storedTask)) {
+                return null;
+            }
+        }
+
+        if (!is_array($storedTask['images'])) {
+            return null;
+        }
+
+        $parseUrl = trim(
+            (string)$taskListItem->url
+        );
+
+        if ($parseUrl === '') {
+            return null;
         }
 
         $currentOrder =
             $storedTask['order_number_in_group']
             ?? $storedTask['group_order_number']
             ?? null;
+
+        if ($currentOrder !== null) {
+            $currentOrder =
+                (int)$currentOrder;
+        }
 
         $alreadyCorrect =
             ($storedTask['book_id'] ?? null)
@@ -535,7 +682,10 @@ class GDZParser
             && array_key_exists(
                 'order_number_in_group',
                 $storedTask
-            );
+            )
+
+            && ($storedTask['parse_url'] ?? null)
+            === $parseUrl;
 
         if ($alreadyCorrect) {
             return false;
@@ -550,6 +700,9 @@ class GDZParser
         $storedTask['order_number_in_group'] =
             $taskListItem->order_number_in_group;
 
+        $storedTask['parse_url'] =
+            $parseUrl;
+
         unset(
             $storedTask['group_order_number']
         );
@@ -560,7 +713,7 @@ class GDZParser
                 $storedTask
             );
         } catch (Exception) {
-            return false;
+            return null;
         }
 
         return true;
@@ -851,7 +1004,8 @@ class GDZParser
 
             $storedBooks =
                 $this->loadStoredBooks(
-                    $booksFilePath
+                    $booksFilePath,
+                    $startURL
                 );
 
             if ($storedBooks !== null) {
@@ -943,6 +1097,21 @@ class GDZParser
                             throw new ParseException(
                                 "No books found on {$startURL}."
                             );
+                        }
+
+                        foreach ($books as $book) {
+                            if (!$book instanceof BookDTO) {
+                                throw new ParseException(
+                                    "Book parser returned an invalid item for {$startURL}."
+                                );
+                            }
+
+                            /*
+                             * Поддерживает и другие BookParser-стратегии:
+                             * источник книги всегда задаёт управляющий слой.
+                             */
+                            $book->parse_url =
+                                $startURL;
                         }
 
                         /*
@@ -1245,7 +1414,8 @@ class GDZParser
                     $storedTasks =
                         $this->normalizeStoredTaskList(
                             $storedTasks,
-                            $book->book_id
+                            $book->book_id,
+                            $book->url
                         );
 
                     try {
@@ -1265,6 +1435,16 @@ class GDZParser
 
                     $useStoredTaskList =
                         true;
+                } elseif (
+                    $this->config->showLogs
+                ) {
+                    $this->cli
+                        ->yellow()
+                        ->out(
+                            "Stored task list has invalid or missing "
+                                . "grouping and will be reparsed: "
+                                . $taskListFilePath
+                        );
                 }
             }
 
@@ -1280,6 +1460,9 @@ class GDZParser
 
                     $taskDTO->book_id =
                         $book->book_id;
+
+                    $taskDTO->parse_url =
+                        $book->url;
 
                     $tasksItemsList[] = [
                         'outputPath' =>
@@ -1329,6 +1512,12 @@ class GDZParser
                                 $this->config->timeout
                             );
 
+                        $tasksItems =
+                            $this
+                            ->normalizeParsedTaskListGrouping(
+                                $tasksItems
+                            );
+
                         $tasksItemsCount =
                             count(
                                 $tasksItems
@@ -1351,6 +1540,9 @@ class GDZParser
                         ) {
                             $task->book_id =
                                 $book->book_id;
+
+                            $task->parse_url =
+                                $book->url;
                         }
 
                         /*
@@ -1602,14 +1794,14 @@ class GDZParser
             // ALREADY EXISTS
             // ====================================================
 
-            if (is_file($outputTaskFullFileName)) {
-                if (
-                    $this
-                    ->updateStoredTaskMetadata(
-                        $outputTaskFullFileName,
-                        $taskListItem
-                    )
-                ) {
+            $storedTaskStatus =
+                $this->normalizeStoredTaskMetadata(
+                    $outputTaskFullFileName,
+                    $taskListItem
+                );
+
+            if ($storedTaskStatus !== null) {
+                if ($storedTaskStatus) {
                     $updatedTaskMetadataCount++;
                 }
 
@@ -1659,6 +1851,13 @@ class GDZParser
                         $taskInfo->order_number_in_group =
                             $taskListItem
                             ->order_number_in_group;
+
+                        /*
+                         * Для полной задачи источником является её собственная
+                         * страница. Для image task это та же исходная ссылка.
+                         */
+                        $taskInfo->parse_url =
+                            $taskListItem->url;
 
                         $this->saveJson(
                             $outputTaskFullFileName,
@@ -1727,7 +1926,8 @@ class GDZParser
             unset(
                 $taskListItem,
                 $outputTaskFileName,
-                $outputTaskFullFileName
+                $outputTaskFullFileName,
+                $storedTaskStatus
             );
         }
 

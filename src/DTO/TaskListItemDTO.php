@@ -13,53 +13,39 @@ final class TaskListItemDTO
 		public ?string $chapter = null,
 		public ?string $group_id = null,
 		public ?int $order_number_in_group = null,
-		public ?string $book_id = null
-	) {}
+		public ?string $book_id = null,
+		public ?string $parse_url = null
+	) {
+	}
 
-	/**
-	 * Создать объект из массива.
-	 */
 	public static function fromArray(array $data): self
 	{
-		/*
-         * Поддерживаем оба варианта названия,
-         * если ранее использовался group_order_number.
-         */
 		$orderNumber =
 			$data['order_number_in_group']
 			?? $data['group_order_number']
 			?? null;
 
 		return new self(
-			title: trim(
-				(string)($data['title'] ?? '')
+			title: trim((string)($data['title'] ?? '')),
+			url: trim((string)($data['url'] ?? '')),
+			chapter: self::normalizeNullableString($data['chapter'] ?? null),
+			group_id: self::normalizeNullableString(
+				$data['group_id']
+				?? $data['group_name']
+				?? null
 			),
-
-			url: trim(
-				(string)($data['url'] ?? '')
-			),
-
-			chapter: isset($data['chapter'])
-				? trim(
-					(string)$data['chapter']
-				)
-				: null,
-
-			group_id: isset($data['group_id'])
-				? trim(
-					(string)$data['group_id']
-				)
-				: null,
-
 			order_number_in_group: $orderNumber !== null
 				? (int)$orderNumber
 				: null,
-
-			book_id: isset($data['book_id'])
-				? trim(
-					(string)$data['book_id']
-				)
-				: null
+			book_id: self::normalizeNullableString($data['book_id'] ?? null),
+			parse_url: self::normalizeNullableString($data['parse_url'] ?? null)
 		);
+	}
+
+	private static function normalizeNullableString(mixed $value): ?string
+	{
+		$value = trim((string)($value ?? ''));
+
+		return $value !== '' ? $value : null;
 	}
 }
