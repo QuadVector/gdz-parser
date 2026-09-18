@@ -51,24 +51,40 @@ class ReshakBookParser implements BookParserInterface
 
 		$result = [];
 
+		// парсим заголовок страницы и определяем класс и предметы
+		$pageTitleNode = $dom->find('h1', 0);
+		$pageGrade = null;
+
+		if ($pageTitleNode) {
+			$pageTitle = Text::cleanupText($pageTitleNode->plaintext);
+
+			if (preg_match('~(\d{1,2})\s*класс~ui', $pageTitle, $matches)) {
+				$pageGrade = $matches[1];
+			}
+		}
+
+		// формируем карту предметов по коду и названию для извлечения информации о предмете книги
+		$subjectMap = [];
+		$subjectNodes = $dom->findMultiOrFalse('.subject-tabs-item[data-subject]');
+
+		if ($subjectNodes) {
+			foreach ($subjectNodes as $subjectNode) {
+				$code = trim((string) $subjectNode->getAttribute('data-subject'));
+				$name = Text::cleanupText($subjectNode->plaintext);
+
+				if ($code !== '' && $code !== 'all' && $name !== '') {
+					$subjectMap[$code] = $name;
+				}
+			}
+		}
+
 		foreach ($domBooks as $bookNode) {
 			$linkNode = $bookNode->find('a', 0);
 			$titleNode = $bookNode->find('.subjectName', 0);
 			$dopTitleNode = $bookNode->find('.dopName', 0);
 			$authorNode = $bookNode->find('.author', 0);
-			$subjectNode = $bookNode->find('.subject', 0);
-			$gradeNode = $bookNode->find('.class-number', 0);
 
-			if (!$linkNode || !$titleNode || !$authorNode || !$gradeNode || !$subjectNode) {
-				unset(
-					$linkNode,
-					$titleNode,
-					$dopTitleNode,
-					$authorNode,
-					$subjectNode,
-					$gradeNode
-				);
-
+			if (!$linkNode || !$titleNode || !$authorNode) {
 				continue;
 			}
 
@@ -83,24 +99,41 @@ class ReshakBookParser implements BookParserInterface
 				Text::cleanupText($linkNode->href)
 			);
 
+			// определяем класс книги на основе URL
+			$grade = $pageGrade;
+			$path = parse_url($bookUrl, PHP_URL_PATH);
+			if (
+				is_string($path)
+				&& preg_match(
+					'~/reshebniki/[^/]+/(\d{1,2})(?:/|$)~ui',
+					$path,
+					$matches
+				)
+			) {
+				$grade = $matches[1];
+			}
+
+			// определяем предмет книги на основе атрибута data-subject
+			$subject = null;
+
+			$subjectCode = trim(
+				(string) $bookNode->getAttribute('data-subject')
+			);
+
+			if (
+				$subjectCode !== ''
+				&& isset($subjectMap[$subjectCode])
+			) {
+				$subject = $subjectMap[$subjectCode];
+			}
+
 			$result[] = new BookDTO(
 				title: $title,
 				author: Text::cleanupText($authorNode->plaintext),
-				grade: Text::cleanupText($gradeNode->plaintext),
-				subject: Text::cleanupText($subjectNode->plaintext),
+				grade: $grade,
+				subject: $subject,
 				parse_url: $bookUrl,
 				book_id: Text::generateBookId($bookUrl)
-			);
-
-			unset(
-				$linkNode,
-				$titleNode,
-				$dopTitleNode,
-				$authorNode,
-				$subjectNode,
-				$gradeNode,
-				$title,
-				$bookUrl
 			);
 		}
 

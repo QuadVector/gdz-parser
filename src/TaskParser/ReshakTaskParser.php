@@ -155,12 +155,22 @@ class ReshakTaskParser implements TaskParserInterface
 	}
 
 	/**
-	 * Собрать текст задачи. Сначала сохраняется привычный текст из
-	 * text_zad/txt_otvet, затем при наличии добавляется mainInfo.
+	 * Собрать текст задачи. Сначала добавляется mainInfo, затем текст из
+	 * text_zad/txt_otvet.
 	 */
 	private function extractContent(object $article): string
 	{
 		$parts = [];
+		$mainInfoNodes = $article->findMultiOrFalse('.mainInfo');
+
+		if ($mainInfoNodes) {
+			foreach ($mainInfoNodes as $mainInfoNode) {
+				$this->appendContentPart(
+					$parts,
+					$this->extractMeaningfulText($mainInfoNode)
+				);
+			}
+		}
 
 		foreach (['.text_zad', '.txt_otvet'] as $selector) {
 			$nodes = $article->findMultiOrFalse($selector);
@@ -178,17 +188,6 @@ class ReshakTaskParser implements TaskParserInterface
 				}
 
 				$this->appendContentPart($parts, $text);
-			}
-		}
-
-		$mainInfoNodes = $article->findMultiOrFalse('.mainInfo');
-
-		if ($mainInfoNodes) {
-			foreach ($mainInfoNodes as $mainInfoNode) {
-				$this->appendContentPart(
-					$parts,
-					$this->extractMeaningfulText($mainInfoNode)
-				);
 			}
 		}
 
