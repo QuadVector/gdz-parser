@@ -107,14 +107,6 @@ class ReshakTaskListParser implements TaskListParserInterface
 			$result
 		);
 
-		/*
-		 * parse_url указывает на страницу книги, из которой был получен
-		 * конкретный элемент списка задач.
-		 */
-		foreach ($result as $task) {
-			$task->parse_url = $url;
-		}
-
 		unset($article, $dom);
 
 		if (function_exists('gc_collect_cycles')) {
@@ -293,7 +285,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 					$result[] = new TaskListItemDTO(
 						title: $title,
 
-						url: Text::makeAbsoluteURL(
+						parse_url: Text::makeAbsoluteURL(
 							self::DOMAIN,
 							$href
 						),
@@ -717,7 +709,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 			$result[] = new TaskListItemDTO(
 				title: $title,
 
-				url: Text::makeAbsoluteURL(
+				parse_url: Text::makeAbsoluteURL(
 					self::DOMAIN,
 					$href
 				),
@@ -769,7 +761,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 			$result[] = new TaskListItemDTO(
 				title: $title,
 
-				url: Text::makeAbsoluteURL(
+				parse_url: Text::makeAbsoluteURL(
 					self::DOMAIN,
 					$href
 				),
@@ -839,7 +831,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 			$result[] = new TaskListItemDTO(
 				title: (string)$task->title,
 
-				url: (string)$task->url,
+				parse_url: (string)$task->parse_url,
 
 				chapter: isset($task->chapter)
 					? (string)$task->chapter
@@ -910,7 +902,9 @@ class ReshakTaskListParser implements TaskListParserInterface
 				return false;
 			}
 
-			$url = trim((string)($task['url'] ?? ''));
+			$parseUrl = trim(
+				(string)($task['parse_url'] ?? '')
+			);
 			$groupName = trim((string)($task['group_id'] ?? ''));
 			$order = filter_var(
 				$task['order_number_in_group'] ?? null,
@@ -923,7 +917,7 @@ class ReshakTaskListParser implements TaskListParserInterface
 			);
 
 			if (
-				$url === ''
+				$parseUrl === ''
 				|| !preg_match('/^razdel_[1-9]\d*$/', $groupName)
 				|| $order === false
 			) {

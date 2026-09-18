@@ -277,6 +277,21 @@ class GDZParser
         }
     }
 
+    /**
+     * Проверить строгий набор полей JSON без альтернативных схем.
+     */
+    private function hasExactKeys(
+        array $data,
+        array $expectedKeys
+    ): bool {
+        $actualKeys = array_keys($data);
+
+        sort($actualKeys);
+        sort($expectedKeys);
+
+        return $actualKeys === $expectedKeys;
+    }
+
     // ============================================================
     // BOOK CACHE
     // ============================================================
@@ -296,15 +311,8 @@ class GDZParser
      * @return BookDTO[]|null
      */
     private function loadStoredBooks(
-        string $booksFilePath,
-        string $parseUrl
+        string $booksFilePath
     ): ?array {
-        $parseUrl = trim($parseUrl);
-
-        if ($parseUrl === '') {
-            return null;
-        }
-
         if (!is_file($booksFilePath)) {
             return null;
         }
@@ -357,18 +365,31 @@ class GDZParser
                 }
 
                 if (
-                    empty($bookData['title'])
-                    || empty($bookData['url'])
+                    !$this->hasExactKeys(
+                        $bookData,
+                        [
+                            'title',
+                            'author',
+                            'grade',
+                            'subject',
+                            'parse_url',
+                            'book_id',
+                        ]
+                    )
                 ) {
                     return null;
                 }
 
-                /*
-                 * Старый books.json можно дополнить без HTTP: его папка
-                 * однозначно соответствует текущему стартовому URL.
-                 */
-                $bookData['parse_url'] =
-                    $parseUrl;
+                $bookParseUrl = trim(
+                    (string)($bookData['parse_url'] ?? '')
+                );
+
+                if (
+                    empty($bookData['title'])
+                    || $bookParseUrl === ''
+                ) {
+                    return null;
+                }
 
                 $books[] =
                     BookDTO::fromArray(
@@ -383,10 +404,7 @@ class GDZParser
             return null;
         }
 
-        /*
-         * Заодно перезаписываем старый books.json
-         * в новом формате с book_id и parse_url.
-         */
+        /* Перезаписываем кеш после нормализации DTO. */
         try {
             $this->saveJson(
                 $booksFilePath,
@@ -424,14 +442,27 @@ class GDZParser
                 return false;
             }
 
-            $url = trim(
-                (string)(
-                    $storedTask['url']
-                    ?? ''
+            if (
+                !$this->hasExactKeys(
+                    $storedTask,
+                    [
+                        'title',
+                        'parse_url',
+                        'chapter',
+                        'group_id',
+                        'order_number_in_group',
+                        'book_id',
+                    ]
                 )
+            ) {
+                return false;
+            }
+
+            $parseUrl = trim(
+                (string)($storedTask['parse_url'] ?? '')
             );
 
-            if ($url === '') {
+            if ($parseUrl === '') {
                 return false;
             }
 
@@ -453,7 +484,6 @@ class GDZParser
 
             $orderNumber =
                 $storedTask['order_number_in_group']
-                ?? $storedTask['group_order_number']
                 ?? null;
 
             if (is_int($orderNumber)) {
@@ -534,13 +564,11 @@ class GDZParser
     }
 
     /**
-     * Дописать book_id и привести старое
-     * group_order_number к order_number_in_group.
+     * Актуализировать book_id сохраненного списка задач.
      */
     private function normalizeStoredTaskList(
         array $storedTasks,
-        string $bookId,
-        string $parseUrl
+        string $bookId
     ): array {
         foreach (
             $storedTasks
@@ -552,31 +580,6 @@ class GDZParser
 
             $storedTask['book_id'] =
                 $bookId;
-
-            /*
-             * Источник списка задач известен из родительской книги,
-             * поэтому старый кеш дополняется без сетевого запроса.
-             */
-            $storedTask['parse_url'] =
-                $parseUrl;
-
-            if (
-                !array_key_exists(
-                    'order_number_in_group',
-                    $storedTask
-                )
-                && array_key_exists(
-                    'group_order_number',
-                    $storedTask
-                )
-            ) {
-                $storedTask['order_number_in_group'] =
-                    $storedTask['group_order_number'];
-
-                unset(
-                    $storedTask['group_order_number']
-                );
-            }
         }
 
         unset($storedTask);
@@ -628,6 +631,23 @@ class GDZParser
             return null;
         }
 
+        if (
+            !$this->hasExactKeys(
+                $storedTask,
+                [
+                    'title',
+                    'parse_url',
+                    'content',
+                    'images',
+                    'group_id',
+                    'order_number_in_group',
+                    'book_id',
+                ]
+            )
+        ) {
+            return null;
+        }
+
         /*
          * Не принимаем за готовый кеш обрезанный/частично записанный JSON.
          * Для image task пустые title/content допустимы, но сами ключи и
@@ -636,7 +656,7 @@ class GDZParser
         foreach (
             [
                 'title',
-                'url',
+                'parse_url',
                 'content',
                 'images',
             ]
@@ -652,16 +672,23 @@ class GDZParser
         }
 
         $parseUrl = trim(
-            (string)$taskListItem->url
+            (string)$taskListItem->parse_url
         );
 
         if ($parseUrl === '') {
             return null;
         }
 
+        $storedParseUrl = trim(
+            (string)$storedTask['parse_url']
+        );
+
+        if ($storedParseUrl === '') {
+            return null;
+        }
+
         $currentOrder =
             $storedTask['order_number_in_group']
-            ?? $storedTask['group_order_number']
             ?? null;
 
         if ($currentOrder !== null) {
@@ -684,7 +711,7 @@ class GDZParser
                 $storedTask
             )
 
-            && ($storedTask['parse_url'] ?? null)
+            && $storedParseUrl
             === $parseUrl;
 
         if ($alreadyCorrect) {
@@ -702,10 +729,6 @@ class GDZParser
 
         $storedTask['parse_url'] =
             $parseUrl;
-
-        unset(
-            $storedTask['group_order_number']
-        );
 
         try {
             $this->saveJson(
@@ -1004,8 +1027,7 @@ class GDZParser
 
             $storedBooks =
                 $this->loadStoredBooks(
-                    $booksFilePath,
-                    $startURL
+                    $booksFilePath
                 );
 
             if ($storedBooks !== null) {
@@ -1106,12 +1128,11 @@ class GDZParser
                                 );
                             }
 
-                            /*
-                             * Поддерживает и другие BookParser-стратегии:
-                             * источник книги всегда задаёт управляющий слой.
-                             */
-                            $book->parse_url =
-                                $startURL;
+                            if (trim($book->parse_url) === '') {
+                                throw new ParseException(
+                                    "Book parser returned an item without parse_url for {$startURL}."
+                                );
+                            }
                         }
 
                         /*
@@ -1192,7 +1213,7 @@ class GDZParser
                     $failedStartURLsCount++;
 
                     $failedStartURLs[] = [
-                        'url' =>
+                        'parse_url' =>
                         $startURL,
 
                         'error' =>
@@ -1278,7 +1299,7 @@ class GDZParser
                 as $failed
             ) {
                 $this->cli->output(
-                    "<red>- {$failed['url']}</red>"
+                    "<red>- {$failed['parse_url']}</red>"
                 );
 
                 $this->cli->output(
@@ -1414,8 +1435,7 @@ class GDZParser
                     $storedTasks =
                         $this->normalizeStoredTaskList(
                             $storedTasks,
-                            $book->book_id,
-                            $book->url
+                            $book->book_id
                         );
 
                     try {
@@ -1461,9 +1481,6 @@ class GDZParser
                     $taskDTO->book_id =
                         $book->book_id;
 
-                    $taskDTO->parse_url =
-                        $book->url;
-
                     $tasksItemsList[] = [
                         'outputPath' =>
                         $bookFolderPath,
@@ -1507,7 +1524,7 @@ class GDZParser
                         $tasksItems =
                             $this->taskListParserContext
                             ->parse(
-                                $book->url,
+                                $book->parse_url,
                                 $this->getNextProxy(),
                                 $this->config->timeout
                             );
@@ -1525,7 +1542,7 @@ class GDZParser
 
                         if ($tasksItemsCount === 0) {
                             throw new ParseException(
-                                "No tasks found for book {$book->url}."
+                                "No tasks found for book {$book->parse_url}."
                             );
                         }
 
@@ -1540,9 +1557,6 @@ class GDZParser
                         ) {
                             $task->book_id =
                                 $book->book_id;
-
-                            $task->parse_url =
-                                $book->url;
                         }
 
                         /*
@@ -1751,13 +1765,13 @@ class GDZParser
 
             if (
                 is_string(
-                    $taskListItem->url
+                    $taskListItem->parse_url
                 )
             ) {
                 $outputTaskFileName .=
                     '_'
                     . Text::generateNamefromURL(
-                        $taskListItem->url
+                        $taskListItem->parse_url
                     );
             }
 
@@ -1828,7 +1842,7 @@ class GDZParser
                         if ($this->config->showLogs) {
                             $this->cli->output(
                                 "Parsing task "
-                                    . "<yellow>{$taskListItem->url}</yellow> "
+                                    . "<yellow>{$taskListItem->parse_url}</yellow> "
                                     . "(attempt {$attempt} "
                                     . "of {$this->config->attempts})"
                             );
@@ -1837,7 +1851,7 @@ class GDZParser
                         $taskInfo =
                             $this->taskParserContext
                             ->parse(
-                                $taskListItem->url,
+                                $taskListItem->parse_url,
                                 $this->getNextProxy(),
                                 $this->config->timeout
                             );
@@ -1857,7 +1871,7 @@ class GDZParser
                          * страница. Для image task это та же исходная ссылка.
                          */
                         $taskInfo->parse_url =
-                            $taskListItem->url;
+                            $taskListItem->parse_url;
 
                         $this->saveJson(
                             $outputTaskFullFileName,
@@ -1902,7 +1916,7 @@ class GDZParser
                     if ($this->config->showLogs) {
                         $this->cli->error(
                             "FAILED task: "
-                                . $taskListItem->url
+                                . $taskListItem->parse_url
                                 . (
                                     $lastExceptionMessage !== null
                                     ? " — {$lastExceptionMessage}"

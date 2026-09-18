@@ -39,6 +39,162 @@ class ReshakTaskParser implements TaskParserInterface
 			. ltrim($href, '/');
 	}
 
+	/**
+	 * Извлечь только полезный текст из блока задачи.
+	 *
+	 * Скрипты, стили, изображения, noindex-дисклеймеры и пустые служебные
+	 * заголовки в content не попадают. Изображения обрабатываются отдельно.
+	 */
+	private function extractMeaningfulText(object $node): string
+	{
+		$html = trim((string)$node->innerText());
+
+		if ($html === '') {
+			return '';
+		}
+
+		$html = preg_replace(
+			'~<!--.*?-->~su',
+			' ',
+			$html
+		) ?? $html;
+
+		$html = preg_replace(
+			'~<(script|style|noscript|template|iframe)\b[^>]*>.*?</\1\s*>~isu',
+			' ',
+			$html
+		) ?? $html;
+
+		$html = preg_replace(
+			'~<noindex\b[^>]*>.*?</noindex\s*>~isu',
+			' ',
+			$html
+		) ?? $html;
+
+		/*
+         * «Решение #» и «Ответ #» сами по себе не несут данных. При этом
+         * содержательные заголовки остаются в тексте.
+         */
+		$html = preg_replace_callback(
+			'~<h([1-6])\b[^>]*>(.*?)</h\1\s*>~isu',
+			static function (array $matches): string {
+				$heading = Text::cleanupText(
+					html_entity_decode(
+						strip_tags($matches[2]),
+						ENT_QUOTES | ENT_HTML5,
+						'UTF-8'
+					)
+				);
+
+				if (
+					$heading === ''
+					|| preg_match(
+						'/^(?:решение|ответ)\s*(?:#|№)?\s*$/ui',
+						$heading
+					) === 1
+				) {
+					return ' ';
+				}
+
+				return ' ' . $matches[0] . ' ';
+			},
+			$html
+		) ?? $html;
+
+		/* Не склеиваем текст соседних div/p/br после strip_tags(). */
+		$html = preg_replace(
+			'~<br\b[^>]*>|</(?:div|p|li|tr|section|article|h[1-6])\s*>~iu',
+			"\n",
+			$html
+		) ?? $html;
+
+		$text = Text::cleanupText(
+			html_entity_decode(
+				strip_tags($html),
+				ENT_QUOTES | ENT_HTML5,
+				'UTF-8'
+			)
+		);
+
+		if ($text === '') {
+			return '';
+		}
+
+		if (
+			preg_match(
+				'/^(?:решение|ответ|показать|скрыть)\s*(?:#|№)?\s*$/ui',
+				$text
+			) === 1
+		) {
+			return '';
+		}
+
+		$meaningfulCharacters = preg_replace(
+			'/[\s\p{P}\p{S}]+/u',
+			'',
+			$text
+		);
+
+		return $meaningfulCharacters !== ''
+			? $text
+			: '';
+	}
+
+	/**
+	 * Добавить непустую часть content без точных дублей.
+	 */
+	private function appendContentPart(array &$parts, string $text): void
+	{
+		$text = trim($text);
+
+		if ($text === '' || in_array($text, $parts, true)) {
+			return;
+		}
+
+		$parts[] = $text;
+	}
+
+	/**
+	 * Собрать текст задачи. Сначала сохраняется привычный текст из
+	 * text_zad/txt_otvet, затем при наличии добавляется mainInfo.
+	 */
+	private function extractContent(object $article): string
+	{
+		$parts = [];
+
+		foreach (['.text_zad', '.txt_otvet'] as $selector) {
+			$nodes = $article->findMultiOrFalse($selector);
+
+			if (!$nodes) {
+				continue;
+			}
+
+			foreach ($nodes as $node) {
+				$text = $this->extractMeaningfulText($node);
+
+				/* Сохраняем прежнюю фильтрацию рекламного текста. */
+				if (preg_match('/решак|reshak/ui', $text)) {
+					continue;
+				}
+
+				$this->appendContentPart($parts, $text);
+			}
+		}
+
+		$mainInfoNodes = $article->findMultiOrFalse('.mainInfo');
+
+		if ($mainInfoNodes) {
+			foreach ($mainInfoNodes as $mainInfoNode) {
+				$this->appendContentPart(
+					$parts,
+					$this->extractMeaningfulText($mainInfoNode)
+				);
+			}
+		}
+
+		return implode('<hr>', $parts);
+	}
+
 	public function parse(
 		string $url = '',
 		?Proxy $proxy = null,
@@ -64,10 +220,10 @@ class ReshakTaskParser implements TaskParserInterface
 					unset($imageObject);
 				} catch (Exception $e) {
 					/*
-					 * У image task нет другого содержимого. Ошибка загрузки
-					 * должна попасть во внешний retry, а не закешироваться
-					 * как успешная пустая задача.
-					 */
+                     * У image task нет другого содержимого. Ошибка загрузки
+                     * должна попасть во внешний retry, а не закешироваться
+                     * как успешная пустая задача.
+                     */
 					throw new ParseException(
 						"Can't load image task {$url}: " . $e->getMessage(),
 						0,
@@ -78,10 +234,9 @@ class ReshakTaskParser implements TaskParserInterface
 
 			return new TaskDTO(
 				title: $resultTitle,
-				url: $url,
+				parse_url: $url,
 				content: $resultContent,
-				images: $resultImages,
-				parse_url: $url
+				images: $resultImages
 			);
 		}
 
@@ -120,23 +275,7 @@ class ReshakTaskParser implements TaskParserInterface
 			unset($resultTitleNode);
 		}
 
-		$resultContentNode = $article->findOneOrFalse('.text_zad');
-
-		// получаем и обрабатываем содержимое исходного текста задачи
-		if ($resultContentNode) {
-			$resultContent = $resultContentNode->innerText();
-
-			// очищаем рекламные описания
-			if (preg_match('/решак|reshak/ui', $resultContent)) {
-				$resultContent = "";
-			} else {
-				$resultContent = Text::cleanupText(
-					strip_tags($resultContent)
-				);
-			}
-
-			unset($resultContentNode);
-		}
+		$resultContent = $this->extractContent($article);
 
 		if ($this->parseImages) {
 			$resultImagesNodes = $article->findMultiOrFalse(
@@ -204,10 +343,9 @@ class ReshakTaskParser implements TaskParserInterface
 
 		return new TaskDTO(
 			title: $resultTitle,
-			url: $url,
+			parse_url: $url,
 			content: $resultContent,
-			images: $resultImages,
-			parse_url: $url
+			images: $resultImages
 		);
 	}
 }
